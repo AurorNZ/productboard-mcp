@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFileSync, writeFileSync } from 'fs';
-import { join, dirname, relative } from 'path';
+import { join, dirname, relative, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { glob } from 'glob';
 
@@ -24,7 +24,7 @@ const aliasToDir = {
 function getRelativePath(fromFile, toDir) {
   const fromDir = dirname(fromFile);
   const toPath = join(distDir, toDir);
-  const relativePath = relative(fromDir, toPath);
+  const relativePath = relative(fromDir, toPath).split(sep).join('/');
   return relativePath.startsWith('.') ? relativePath : `./${relativePath}`;
 }
 
