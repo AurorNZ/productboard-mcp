@@ -30,7 +30,7 @@ export class ListNotesTool extends BaseTool<ListNotesParams> {
   constructor(apiClient: ProductboardAPIClient, logger: Logger) {
     super(
       'pb_note_list',
-      'List customer feedback notes',
+      'List customer feedback notes. Default limit is 20, suitable for browsing recent notes. For analysis, counting, or workspace-wide tasks (e.g. "how many notes have no tags"), use limit: 500 with resolve_entities: false to avoid timeouts.',
       {
         type: 'object',
         properties: {
@@ -95,6 +95,7 @@ export class ListNotesTool extends BaseTool<ListNotesParams> {
             minimum: 1,
             maximum: 500,
             default: 20,
+            description: 'Number of notes to return (default 20 for browsing). For analysis or counting tasks that require complete data, use 500 with resolve_entities: false.',
           },
           resolve_entities: {
             type: 'boolean',
@@ -256,9 +257,15 @@ export class ListNotesTool extends BaseTool<ListNotesParams> {
       tags: (note.fields?.tags || []).map((t: any) => t?.name ?? t?.label ?? String(t)),
     }));
 
+    // Warn when the limit was reached — there are likely more notes in the workspace
+    const truncationWarning = allNotes.length >= limit
+      ? `⚠️ Result limit reached (${limit} notes returned). This may not represent all notes in the workspace. For complete analysis, re-run with a higher limit (up to 500) and resolve_entities: false.\n\n`
+      : '';
+
     // Create a text summary of the notes
     const summary = formattedNotes.length > 0
-      ? `Found ${allNotes.length} notes total, showing ${formattedNotes.length}:\n\n` +
+      ? truncationWarning +
+        `Showing ${formattedNotes.length} note(s):\n\n` +
         formattedNotes.map((n: any, i: number) =>
           `${i + 1}. ${n.title}\n` +
           `   ID: ${n.id}\n` +

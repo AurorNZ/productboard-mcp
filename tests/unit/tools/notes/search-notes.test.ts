@@ -503,6 +503,24 @@ describe('SearchNotesTool', () => {
       expect(mockLogger.info).toHaveBeenCalledWith('Searching notes');
     });
 
+    it('should show truncation warning when result count equals limit', async () => {
+      const limitNotes = Array.from({ length: 5 }, (_, i) => makeNote({ id: `note-${i}` }));
+      mockSinglePage(limitNotes);
+
+      const result = await tool.execute({ limit: 5 });
+
+      expect(result.content[0].text).toContain('⚠️ Result limit reached');
+      expect(result.content[0].text).toContain('5 notes returned');
+    });
+
+    it('should not show truncation warning when result count is below limit', async () => {
+      mockSinglePage([makeNote()]);
+
+      const result = await tool.execute({ limit: 10 });
+
+      expect(result.content[0].text).not.toContain('⚠️');
+    });
+
     it('should handle API errors gracefully', async () => {
       mockApiClient.post.mockRejectedValue(new Error('Network failure'));
 

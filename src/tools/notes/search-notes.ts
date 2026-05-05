@@ -33,7 +33,7 @@ export class SearchNotesTool extends BaseTool<SearchNotesParams> {
   constructor(apiClient: ProductboardAPIClient, logger: Logger) {
     super(
       'pb_note_search',
-      'Search customer feedback notes using structured filters (tags, linked features, customers, date ranges, note type)',
+      'Search customer feedback notes using structured filters (tags, linked features, customers, date ranges, note type). Default limit is 20, suitable for targeted lookups. For analysis or counting tasks that require complete data (e.g. "how many notes have no tags"), use limit: 500 with resolve_entities: false.',
       {
         type: 'object',
         properties: {
@@ -117,7 +117,7 @@ export class SearchNotesTool extends BaseTool<SearchNotesParams> {
             minimum: 1,
             maximum: 500,
             default: 20,
-            description: 'Number of notes to return (default 20)',
+            description: 'Number of notes to return (default 20 for targeted lookups). For analysis or counting tasks that require complete data, use 500 with resolve_entities: false.',
           },
           resolve_entities: {
             type: 'boolean',
@@ -342,9 +342,15 @@ export class SearchNotesTool extends BaseTool<SearchNotesParams> {
       tags: (note.fields?.tags || []).map((t: any) => t?.name ?? t?.label ?? String(t)),
     }));
 
+    // Warn when the limit was reached — there are likely more matching notes
+    const truncationWarning = notes.length >= limit
+      ? `⚠️ Result limit reached (${limit} notes returned). This may not represent all matching notes. For complete analysis, re-run with a higher limit (up to 500) and resolve_entities: false.\n\n`
+      : '';
+
     const summary =
       formattedNotes.length > 0
-        ? `Found ${formattedNotes.length} note(s):\n\n` +
+        ? truncationWarning +
+          `Found ${formattedNotes.length} note(s):\n\n` +
           formattedNotes
             .map(
               (n: any, i: number) =>

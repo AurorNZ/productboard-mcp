@@ -26,7 +26,7 @@ describe('ListNotesTool', () => {
   describe('constructor', () => {
     it('should initialize with correct name and description', () => {
       expect(tool.name).toBe('pb_note_list');
-      expect(tool.description).toBe('List customer feedback notes');
+      expect(tool.description).toContain('List customer feedback notes');
     });
 
     it('should define correct parameters schema', () => {
@@ -136,7 +136,7 @@ describe('ListNotesTool', () => {
       expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', {}, { maxItems: 20 });
 
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Found 2 notes total, showing 2');
+      expect(result.content[0].text).toContain('Showing 2 note(s)');
       expect(result.content[0].text).toContain('First note');
       expect(result.content[0].text).toContain('Second note');
 
@@ -247,7 +247,7 @@ describe('ListNotesTool', () => {
       expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', {}, { maxItems: 1 });
 
       // Only 1 note returned due to limit
-      expect(result.content[0].text).toContain('showing 1');
+      expect(result.content[0].text).toContain('Showing 1 note(s)');
     });
 
     it('should handle pagination', async () => {
@@ -256,7 +256,7 @@ describe('ListNotesTool', () => {
       const result = await tool.execute({});
 
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Found 2 notes total, showing 2');
+      expect(result.content[0].text).toContain('Showing 2 note(s)');
     });
 
     it('should validate limit range', async () => {
@@ -614,6 +614,32 @@ describe('ListNotesTool', () => {
           expect.anything(),
           { maxItems: 7 },
         );
+      });
+
+      it('should show truncation warning when result count equals limit', async () => {
+        // Return exactly `limit` notes — signals the limit was hit
+        const limitNotes = Array.from({ length: 5 }, (_, i) => ({
+          id: `note-${i}`,
+          fields: { name: `Note ${i}`, content: 'Content', owner: { email: 'a@b.com' }, tags: [] },
+          createdAt: '2025-01-01T00:00:00Z',
+          relationships: { data: [] },
+          links: {},
+        }));
+        mockApiClient.getAllPages.mockResolvedValue(limitNotes);
+
+        const result = await tool.execute({ limit: 5 });
+
+        expect(result.content[0].text).toContain('⚠️ Result limit reached');
+        expect(result.content[0].text).toContain('5 notes returned');
+      });
+
+      it('should not show truncation warning when result count is below limit', async () => {
+        // Return fewer than limit — we got everything
+        mockApiClient.getAllPages.mockResolvedValue(mockNotes); // 2 notes, default limit 20
+
+        const result = await tool.execute({});
+
+        expect(result.content[0].text).not.toContain('⚠️');
       });
 
       it('should pass default maxItems of 20 when limit is omitted', async () => {
