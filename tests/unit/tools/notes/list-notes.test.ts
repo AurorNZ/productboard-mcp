@@ -92,8 +92,8 @@ describe('ListNotesTool', () => {
           limit: {
             type: 'integer',
             minimum: 1,
-            maximum: 5000,
-            default: 100,
+            maximum: 500,
+            default: 20,
           },
         },
       });
@@ -133,7 +133,7 @@ describe('ListNotesTool', () => {
 
       const result = await tool.execute({});
 
-      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', {});
+      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', {}, { maxItems: 20 });
 
       expect(result.content[0].type).toBe('text');
       expect(result.content[0].text).toContain('Found 2 notes total, showing 2');
@@ -148,7 +148,7 @@ describe('ListNotesTool', () => {
 
       await tool.execute({ processed: true });
 
-      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { processed: true });
+      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { processed: true }, { maxItems: 20 });
     });
 
     it('should filter by archived', async () => {
@@ -156,7 +156,7 @@ describe('ListNotesTool', () => {
 
       await tool.execute({ archived: false });
 
-      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { archived: false });
+      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { archived: false }, { maxItems: 20 });
     });
 
     it('should filter by owner_email', async () => {
@@ -164,7 +164,7 @@ describe('ListNotesTool', () => {
 
       await tool.execute({ owner_email: 'owner1@example.com' });
 
-      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { 'owner[email]': 'owner1@example.com' });
+      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { 'owner[email]': 'owner1@example.com' }, { maxItems: 20 });
     });
 
     it('should filter by owner_id', async () => {
@@ -172,7 +172,7 @@ describe('ListNotesTool', () => {
 
       await tool.execute({ owner_id: 'user-123' });
 
-      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { 'owner[id]': 'user-123' });
+      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { 'owner[id]': 'user-123' }, { maxItems: 20 });
     });
 
     it('should filter by creator_email', async () => {
@@ -180,7 +180,7 @@ describe('ListNotesTool', () => {
 
       await tool.execute({ creator_email: 'creator@example.com' });
 
-      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { 'creator[email]': 'creator@example.com' });
+      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { 'creator[email]': 'creator@example.com' }, { maxItems: 20 });
     });
 
     it('should filter by creator_id', async () => {
@@ -188,7 +188,7 @@ describe('ListNotesTool', () => {
 
       await tool.execute({ creator_id: 'creator-456' });
 
-      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { 'creator[id]': 'creator-456' });
+      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { 'creator[id]': 'creator-456' }, { maxItems: 20 });
     });
 
     it('should filter by source_record_id', async () => {
@@ -196,7 +196,7 @@ describe('ListNotesTool', () => {
 
       await tool.execute({ source_record_id: 'src-789' });
 
-      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { 'source[recordId]': 'src-789' });
+      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', { 'source[recordId]': 'src-789' }, { maxItems: 20 });
     });
 
     it('should filter by metadata source fields', async () => {
@@ -207,7 +207,7 @@ describe('ListNotesTool', () => {
       expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', {
         'metadata[source][system]': 'zendesk',
         'metadata[source][recordId]': 'zd-100',
-      });
+      }, { maxItems: 20 });
     });
 
     it('should filter by created date range', async () => {
@@ -221,7 +221,7 @@ describe('ListNotesTool', () => {
       expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', {
         createdFrom: '2025-01-01T00:00:00Z',
         createdTo: '2025-01-31T23:59:59Z',
-      });
+      }, { maxItems: 20 });
     });
 
     it('should filter by updated date range', async () => {
@@ -235,7 +235,7 @@ describe('ListNotesTool', () => {
       expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', {
         updatedFrom: '2025-02-01T00:00:00Z',
         updatedTo: '2025-02-28T23:59:59Z',
-      });
+      }, { maxItems: 20 });
     });
 
     it('should respect custom limit (client-side slice)', async () => {
@@ -243,10 +243,10 @@ describe('ListNotesTool', () => {
 
       const result = await tool.execute({ limit: 1 });
 
-      // limit is not sent to API — getAllPages fetches all, then we slice
-      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', {});
+      // maxItems passed to getAllPages to stop pagination early
+      expect(mockApiClient.getAllPages).toHaveBeenCalledWith('/notes', {}, { maxItems: 1 });
 
-      // Only 1 note returned due to client-side limit
+      // Only 1 note returned due to limit
       expect(result.content[0].text).toContain('showing 1');
     });
 
@@ -256,12 +256,12 @@ describe('ListNotesTool', () => {
       const result = await tool.execute({});
 
       expect(result.content[0].type).toBe('text');
-      expect(result.content[0].text).toContain('Found 2 notes');
+      expect(result.content[0].text).toContain('Found 2 notes total, showing 2');
     });
 
     it('should validate limit range', async () => {
       await expect(tool.execute({ limit: 0 })).rejects.toThrow('Invalid parameters');
-      await expect(tool.execute({ limit: 5001 })).rejects.toThrow('Invalid parameters');
+      await expect(tool.execute({ limit: 501 })).rejects.toThrow('Invalid parameters');
     });
 
     it('should handle empty results', async () => {
@@ -587,6 +587,71 @@ describe('ListNotesTool', () => {
         const result = await tool.execute({});
 
         expect(result.content[0].text).not.toContain('Linked features:');
+      });
+    });
+
+    describe('resolve_entities and maxItems', () => {
+      const noteWithRelationships = {
+        id: 'note-re',
+        fields: { content: 'Feedback', tags: [] },
+        createdAt: '2025-01-01T00:00:00Z',
+        relationships: {
+          data: [
+            { type: 'customer', target: { type: 'company', id: 'co-skip' } },
+            { type: 'link', target: { type: 'feature', id: 'feat-skip' } },
+          ],
+        },
+        links: {},
+      };
+
+      it('should pass maxItems equal to limit into getAllPages', async () => {
+        mockApiClient.getAllPages.mockResolvedValue([]);
+
+        await tool.execute({ limit: 7 });
+
+        expect(mockApiClient.getAllPages).toHaveBeenCalledWith(
+          '/notes',
+          expect.anything(),
+          { maxItems: 7 },
+        );
+      });
+
+      it('should pass default maxItems of 20 when limit is omitted', async () => {
+        mockApiClient.getAllPages.mockResolvedValue([]);
+
+        await tool.execute({});
+
+        expect(mockApiClient.getAllPages).toHaveBeenCalledWith(
+          '/notes',
+          expect.anything(),
+          { maxItems: 20 },
+        );
+      });
+
+      it('should skip all entity API calls when resolve_entities is false', async () => {
+        mockApiClient.getAllPages.mockResolvedValue([noteWithRelationships]);
+
+        await tool.execute({ resolve_entities: false });
+
+        expect(mockApiClient.makeRequest).not.toHaveBeenCalled();
+      });
+
+      it('should perform entity resolution by default when resolve_entities is omitted', async () => {
+        mockApiClient.getAllPages.mockResolvedValue([noteWithRelationships]);
+        mockApiClient.makeRequest.mockResolvedValue({ data: { fields: { name: 'Corp' } } });
+
+        await tool.execute({});
+
+        expect(mockApiClient.makeRequest).toHaveBeenCalled();
+      });
+
+      it('should perform entity resolution when resolve_entities is explicitly true', async () => {
+        mockApiClient.getAllPages.mockResolvedValue([noteWithRelationships]);
+        mockApiClient.makeRequest.mockResolvedValue({ data: { fields: { name: 'Corp' } } });
+
+        await tool.execute({ resolve_entities: true });
+
+        expect(mockApiClient.makeRequest).toHaveBeenCalled();
       });
     });
   });

@@ -17,6 +17,7 @@ export interface PaginatedResponse<T> {
 
 export interface AllPagesOptions {
   maxPages?: number;
+  maxItems?: number;
 }
 
 export interface BatchOperation {

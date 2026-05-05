@@ -298,6 +298,33 @@ describe('pb_note_create', () => {
   });
 });
 
+// ─── pb_note_list pagination ──────────────────────────────────────────────────
+
+describe('pb_note_list (limit enforced)', () => {
+  itif(SKIP)('returns no more notes than the requested limit', async () => {
+    const tools = makeTools();
+    const result = await tools.noteList.execute({ limit: 3 });
+    const output = text(result);
+    const match = output.match(/showing (\d+)/i);
+    if (match) {
+      expect(parseInt(match[1], 10)).toBeLessThanOrEqual(3);
+    } else {
+      // No notes in workspace — acceptable
+      expect(output).toBeDefined();
+    }
+  });
+});
+
+describe('pb_note_list (resolve_entities: false)', () => {
+  itif(SKIP)('completes without making entity resolution API calls', async () => {
+    const spy = jest.spyOn(apiClient, 'makeRequest');
+    const tools = makeTools();
+    await tools.noteList.execute({ limit: 5, resolve_entities: false });
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});
+
 // ─── Objectives ──────────────────────────────────────────────────────────────
 
 describe('pb_objective_list', () => {

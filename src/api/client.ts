@@ -183,6 +183,7 @@ export class ProductboardAPIClient {
     options?: AllPagesOptions,
   ): Promise<T[]> {
     const maxPages = options?.maxPages ?? 50;
+    const maxItems = options?.maxItems;
     const allData: T[] = [];
     let pageCursor: string | undefined;
     let page = 0;
@@ -196,6 +197,8 @@ export class ProductboardAPIClient {
       const response = await this.get<PaginatedResponse<T>>(endpoint, paginatedParams);
       allData.push(...response.data);
       page++;
+
+      if (maxItems !== undefined && allData.length >= maxItems) break;
 
       const nextUrl = response.links?.next ?? null;
       if (!nextUrl) break;

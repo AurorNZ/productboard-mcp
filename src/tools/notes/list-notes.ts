@@ -18,6 +18,7 @@ interface ListNotesParams {
   updated_from?: string;
   updated_to?: string;
   limit?: number;
+  resolve_entities?: boolean;
 }
 
 interface ResolvedFeature {
@@ -92,8 +93,13 @@ export class ListNotesTool extends BaseTool<ListNotesParams> {
           limit: {
             type: 'integer',
             minimum: 1,
-            maximum: 5000,
-            default: 100,
+            maximum: 500,
+            default: 20,
+          },
+          resolve_entities: {
+            type: 'boolean',
+            default: true,
+            description: 'When true (default), resolves company and feature IDs to display names — adds one API call per unique entity. Set to false when fetching large batches for search/scan purposes to avoid timeouts.',
           },
         },
       },
@@ -151,8 +157,9 @@ export class ListNotesTool extends BaseTool<ListNotesParams> {
     if (params.updated_from) queryParams.updatedFrom = params.updated_from;
     if (params.updated_to) queryParams.updatedTo = params.updated_to;
 
-    const allNotes = await this.apiClient.getAllPages<any>('/notes', queryParams);
-    const limit = params.limit || 100;
+    const limit = params.limit || 20;
+    const shouldResolve = params.resolve_entities !== false;
+    const allNotes = await this.apiClient.getAllPages<any>('/notes', queryParams, { maxItems: limit });
     const notes = allNotes.slice(0, limit);
 
     const stripHtml = (s: unknown): string => String(s)
@@ -175,41 +182,43 @@ export class ListNotesTool extends BaseTool<ListNotesParams> {
       return '';
     };
 
-    // Collect unique company IDs that need resolving, then batch-resolve in parallel
-    const companyIds: string[] = [
-      ...new Set<string>(
-        notes.flatMap((note: any) =>
-          (note.relationships?.data ?? [])
-            .filter((r: any) => r.type === 'customer' && r.target?.type === 'company' && !r.target.name)
-            .map((r: any) => r.target.id as string)
-        )
-      ),
-    ];
     const companyNames = new Map<string, string>();
-    await Promise.all(
-      companyIds.map(async (id) => {
-        const name = await this.resolveEntityName(id);
-        if (name) companyNames.set(id, name);
-      })
-    );
-
-    // Collect unique feature IDs from all notes, then batch-resolve in parallel
-    const featureIds: string[] = [
-      ...new Set<string>(
-        notes.flatMap((note: any) =>
-          (note.relationships?.data ?? [])
-            .filter((r: any) => r.type === 'link' && r.target?.type === 'feature')
-            .map((r: any) => r.target.id as string)
-        )
-      ),
-    ];
     const resolvedFeatures = new Map<string, ResolvedFeature>();
-    await Promise.all(
-      featureIds.map(async (id) => {
-        const feature = await this.resolveFeature(id);
-        if (feature) resolvedFeatures.set(id, feature);
-      })
-    );
+
+    if (shouldResolve) {
+      // Collect unique company IDs that need resolving, then batch-resolve in parallel
+      const companyIds: string[] = [
+        ...new Set<string>(
+          notes.flatMap((note: any) =>
+            (note.relationships?.data ?? [])
+              .filter((r: any) => r.type === 'customer' && r.target?.type === 'company' && !r.target.name)
+              .map((r: any) => r.target.id as string)
+          )
+        ),
+      ];
+      await Promise.all(
+        companyIds.map(async (id) => {
+          const name = await this.resolveEntityName(id);
+          if (name) companyNames.set(id, name);
+        })
+      );
+
+      const featureIds: string[] = [
+        ...new Set<string>(
+          notes.flatMap((note: any) =>
+            (note.relationships?.data ?? [])
+              .filter((r: any) => r.type === 'link' && r.target?.type === 'feature')
+              .map((r: any) => r.target.id as string)
+          )
+        ),
+      ];
+      await Promise.all(
+        featureIds.map(async (id) => {
+          const feature = await this.resolveFeature(id);
+          if (feature) resolvedFeatures.set(id, feature);
+        })
+      );
+    }
 
     // Extract company from relationships, resolving IDs to names where possible
     const extractCompany = (note: any): string | null => {
