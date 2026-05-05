@@ -2,7 +2,7 @@
   "manifest_version": "0.1",
   "name": "productboard-mcp",
   "display_name": "Productboard",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "MCP server for the Productboard API. Enables AI assistants (Claude, Cursor, etc.) to interact with your Productboard workspace.",
   "author": {
     "name": "AnthonyMarter-auror",
@@ -39,6 +39,7 @@
     { "name": "pb_note_get", "description": "Get a customer note by ID" },
     { "name": "pb_note_list", "description": "List customer notes" },
     { "name": "pb_note_create", "description": "Create a customer note" },
+    { "name": "pb_note_search", "description": "Search customer notes using structured filters" },
     { "name": "pb_objective_list", "description": "List objectives" },
     { "name": "pb_objective_create", "description": "Create an objective" },
     { "name": "pb_objective_update", "description": "Update an objective" },

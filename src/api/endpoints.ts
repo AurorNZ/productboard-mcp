@@ -21,6 +21,7 @@ export const ENDPOINTS = {
   },
   notes: {
     list: '/notes',
+    search: '/notes/search',
     get: '/notes/:id',
     create: '/notes',
     update: '/notes/:id',

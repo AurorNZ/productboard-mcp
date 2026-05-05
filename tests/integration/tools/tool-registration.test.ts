@@ -8,6 +8,7 @@ import { CreateProductTool } from '@tools/products/create-product';
 import { ProductHierarchyTool } from '@tools/products/product-hierarchy';
 import { CreateNoteTool } from '@tools/notes/create-note';
 import { ListNotesTool } from '@tools/notes/list-notes';
+import { SearchNotesTool } from '@tools/notes/search-notes';
 import { ListObjectivesTool } from '@tools/objectives/list-objectives';
 import { CreateObjectiveTool } from '@tools/objectives/create-objective';
 import { ListReleasesTool } from '@tools/releases/list-releases';
@@ -76,6 +77,7 @@ describe('Tool Registration Integration', () => {
       const tools = [
         new CreateNoteTool(mockApiClient, mockLogger),
         new ListNotesTool(mockApiClient, mockLogger),
+        new SearchNotesTool(mockApiClient, mockLogger),
       ];
 
       tools.forEach(tool => {
@@ -84,7 +86,8 @@ describe('Tool Registration Integration', () => {
 
       expect(registry.hasTool('pb_note_create')).toBe(true);
       expect(registry.hasTool('pb_note_list')).toBe(true);
-      expect(registry.size()).toBe(2);
+      expect(registry.hasTool('pb_note_search')).toBe(true);
+      expect(registry.size()).toBe(3);
     });
 
     it('should register all objective tools', () => {
@@ -164,6 +167,7 @@ describe('Tool Registration Integration', () => {
         new ProductHierarchyTool(mockApiClient, mockLogger),
         new CreateNoteTool(mockApiClient, mockLogger),
         new ListNotesTool(mockApiClient, mockLogger),
+        new SearchNotesTool(mockApiClient, mockLogger),
         new ListObjectivesTool(mockApiClient, mockLogger),
         new ListReleasesTool(mockApiClient, mockLogger),
       ];

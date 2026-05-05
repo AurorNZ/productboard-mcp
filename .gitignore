@@ -134,6 +134,9 @@ debug.log
 mcp-server.log
 *.mcp.log
 
+# Local MCP server config (contains API tokens - do not commit)
+.mcp.json
+
 # Memory and coordination files (development artifacts)
 memory/
 coordination/

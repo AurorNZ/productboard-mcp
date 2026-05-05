@@ -23,6 +23,7 @@ import { ProductHierarchyTool } from '../../src/tools/products/product-hierarchy
 import { CreateProductTool } from '../../src/tools/products/create-product.js';
 import { ListNotesTool } from '../../src/tools/notes/list-notes.js';
 import { CreateNoteTool } from '../../src/tools/notes/create-note.js';
+import { SearchNotesTool } from '../../src/tools/notes/search-notes.js';
 import { ListObjectivesTool } from '../../src/tools/objectives/list-objectives.js';
 import { CreateObjectiveTool } from '../../src/tools/objectives/create-objective.js';
 import { UpdateObjectiveTool } from '../../src/tools/objectives/update-objective.js';
@@ -65,6 +66,7 @@ function makeTools() {
     productCreate: new CreateProductTool(apiClient, logger),
     noteList: new ListNotesTool(apiClient, logger),
     noteCreate: new CreateNoteTool(apiClient, logger),
+    noteSearch: new SearchNotesTool(apiClient, logger),
     objectiveList: new ListObjectivesTool(apiClient, logger),
     objectiveCreate: new CreateObjectiveTool(apiClient, logger),
     objectiveUpdate: new UpdateObjectiveTool(apiClient, logger),
@@ -322,6 +324,88 @@ describe('pb_note_list (resolve_entities: false)', () => {
     await tools.noteList.execute({ limit: 5, resolve_entities: false });
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+// ─── pb_note_search ───────────────────────────────────────────────────────────
+
+describe('pb_note_search (no filters)', () => {
+  itif(SKIP)('returns notes without error', async () => {
+    const tools = makeTools();
+    const result = await tools.noteSearch.execute({ limit: 5 });
+    const output = text(result);
+    expect(output).toBeDefined();
+    expect(output).not.toMatch(/^undefined$/);
+  });
+});
+
+describe('pb_note_search (type filter)', () => {
+  itif(SKIP)('filters to textNote type only', async () => {
+    const tools = makeTools();
+    const result = await tools.noteSearch.execute({ type: 'textNote', limit: 5 });
+    const output = text(result);
+    if (output.includes('Type:')) {
+      const typeLines = output.match(/Type: .+/g) ?? [];
+      typeLines.forEach(line => expect(line).toContain('textNote'));
+    }
+  });
+});
+
+describe('pb_note_search (date range filter)', () => {
+  itif(SKIP)('returns notes within the last 90 days', async () => {
+    const to = new Date().toISOString();
+    const from = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const tools = makeTools();
+    const result = await tools.noteSearch.execute({ created_from: from, created_to: to, limit: 5 });
+    expect(text(result)).toBeDefined();
+  });
+});
+
+describe('pb_note_search (resolve_entities: false)', () => {
+  itif(SKIP)('completes without making entity resolution calls', async () => {
+    const spy = jest.spyOn(apiClient, 'makeRequest');
+    const tools = makeTools();
+    await tools.noteSearch.execute({ limit: 5, resolve_entities: false });
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+});
+
+describe('pb_note_search (feature_id filter)', () => {
+  itif(SKIP)('filters notes linked to a real feature', async () => {
+    const featResp = await apiClient.get<any>('/entities', { 'type[]': 'feature' });
+    const featureId = featResp?.data?.[0]?.id;
+    if (!featureId) return;
+
+    const tools = makeTools();
+    const result = await tools.noteSearch.execute({ feature_id: featureId, limit: 5 });
+    expect(text(result)).toBeDefined();
+  });
+});
+
+describe('pb_note_search (round-trip: create then search by tag)', () => {
+  const tag = `e2e-eval-${Date.now()}`;
+  let createdNoteId: string;
+
+  itif(SKIP)('creates a note with a unique tag', async () => {
+    const tools = makeTools();
+    const result = await tools.noteCreate.execute({
+      content: 'E2E search eval note',
+      title: 'E2E Search Eval',
+      tags: [tag],
+    });
+    const data = parsed(result);
+    expect(data.success).toBe(true);
+    createdNoteId = data.data?.data?.id ?? data.data?.id;
+    expect(createdNoteId).toBeTruthy();
+    cleanup.push({ type: 'note', id: createdNoteId });
+  });
+
+  itif(SKIP)('finds the note by its unique tag', async () => {
+    if (!createdNoteId) return;
+    const tools = makeTools();
+    const result = await tools.noteSearch.execute({ tags: [tag], limit: 5 });
+    expect(text(result)).toContain(createdNoteId);
   });
 });
 
