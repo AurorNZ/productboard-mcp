@@ -61,6 +61,9 @@ jobs:
       - name: Attest build provenance
         # Produces a signed provenance attestation attached to the release artifact.
         # TODO(sec): pin to commit SHA.
+        # continue-on-error: attestation API is not available on personal forks;
+        # re-enable as blocking once repo is moved to AurorNZ org.
+        continue-on-error: true
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: ${{ env.FILENAME }}
