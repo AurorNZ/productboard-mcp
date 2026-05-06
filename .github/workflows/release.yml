@@ -50,6 +50,7 @@ jobs:
           VERSION=${{ steps.version.outputs.VERSION }}
           FILENAME="productboard-mcp-v${VERSION}.mcpb"
           zip -r "$FILENAME" \
+            manifest.json \
             productboard-mcp.js \
             package.json \
             dist/ \
