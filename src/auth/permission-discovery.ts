@@ -33,6 +33,11 @@ export class PermissionDiscoveryService {
       const token = (config as any).token || process.env.PRODUCTBOARD_API_TOKEN;
       if (!token || typeof token !== 'string') return null;
       const parts = token.split('.');
+      // PB tokens are not JWTs in practice — this falls through to read-only today.
+      // IMPORTANT: even if PB issues JWTs in future, this decodes WITHOUT signature
+      // verification. The role value only controls which tool *descriptions* Claude
+      // sees; it is NOT a security boundary. Productboard's API enforces real
+      // permissions on every call regardless of what is set here.
       if (parts.length !== 3) return null;
       const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
       return payload.role || null;

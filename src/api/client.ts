@@ -101,7 +101,14 @@ export class ProductboardAPIClient {
       async (error: AxiosError) => {
         if (error.response) {
           const apiError = this.handleAPIError(error);
-          this.logger.error('API Error', apiError.toJSON());
+          // Log only safe fields — toJSON() includes response body in 'details'
+          // which may contain customer content (e.g. failed pb_note_create payloads).
+          this.logger.error('API Error', {
+            name: apiError.name,
+            message: apiError.message,
+            code: apiError.code,
+            statusCode: apiError.statusCode,
+          });
           throw apiError;
         }
         throw error;

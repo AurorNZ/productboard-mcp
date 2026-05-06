@@ -140,7 +140,11 @@ export class ProductboardMCPServer {
 
       // Validate configuration
       const configValidation = this.dependencies.config;
-      logger.debug('Configuration loaded', { config: configValidation });
+      logger.debug('Configuration loaded', {
+        authType: configValidation.auth?.type,
+        apiBaseUrl: configValidation.api?.baseUrl,
+        logLevel: configValidation.logLevel,
+      });
 
       // Initialize MCP server first to start listening for protocol messages
       this.initializeMCPServer();

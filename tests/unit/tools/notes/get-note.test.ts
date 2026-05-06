@@ -86,6 +86,14 @@ describe('GetNoteTool', () => {
       expect(mockLogger.info).toHaveBeenCalledWith('Getting note', { noteId: baseNote.id });
     });
 
+    it('should encode special characters in note ID to prevent path traversal', async () => {
+      mockApiClient.get.mockResolvedValue({ data: { ...baseNote, id: 'note/malicious' } });
+
+      await tool.execute({ id: 'note/malicious' });
+
+      expect(mockApiClient.get).toHaveBeenCalledWith('/notes/note%2Fmalicious');
+    });
+
     it('should return note fields in a formatted text block', async () => {
       mockApiClient.get.mockResolvedValue({ data: baseNote });
 
@@ -229,8 +237,8 @@ describe('GetNoteTool', () => {
 
       const result = await tool.execute({ id: note.id });
 
-      expect(result.content[0].text).toContain('[Alice]: Hello there');
-      expect(result.content[0].text).toContain('[Bob]: Hi back');
+      expect(result.content[0].text).toContain('[PB note from "Alice"]: Hello there');
+      expect(result.content[0].text).toContain('[PB note from "Bob"]: Hi back');
     });
 
     it('should fall back to authorType when authorName is absent', async () => {
@@ -247,7 +255,7 @@ describe('GetNoteTool', () => {
 
       const result = await tool.execute({ id: note.id });
 
-      expect(result.content[0].text).toContain('[customer]: I need help');
+      expect(result.content[0].text).toContain('[PB note from "customer"]: I need help');
     });
 
     it('should fall back to "Unknown" when both authorName and authorType are absent', async () => {
@@ -264,7 +272,7 @@ describe('GetNoteTool', () => {
 
       const result = await tool.execute({ id: note.id });
 
-      expect(result.content[0].text).toContain('[Unknown]: Anonymous message');
+      expect(result.content[0].text).toContain('[PB note from "Unknown"]: Anonymous message');
     });
 
     it('should return empty string for missing content field', async () => {

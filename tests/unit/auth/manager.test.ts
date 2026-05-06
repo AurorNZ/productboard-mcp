@@ -57,7 +57,7 @@ describe('AuthenticationManager', () => {
     });
 
     it('should create BearerTokenAuth instance', () => {
-      expect(BearerTokenAuth).toHaveBeenCalledWith('https://api.productboard.com/v2');
+      expect(BearerTokenAuth).toHaveBeenCalledWith('https://api.productboard.com/v2', mockLogger);
     });
 
     it('should return auth headers from bearer auth', () => {
@@ -320,6 +320,29 @@ describe('AuthenticationManager', () => {
       const headers = authManager.getAuthHeaders();
       expect(headers).toBeDefined();
       expect(headers).toEqual({ Authorization: 'Bearer test-token' });
+    });
+  });
+
+  describe('SKIP_TOKEN_VALIDATION bypass', () => {
+    it('should return true and log a warning without calling the API when SKIP_TOKEN_VALIDATION is set', async () => {
+      const { BearerTokenAuth: RealBearerTokenAuth } = jest.requireActual('../../../src/auth/bearer.js');
+      const warnFn = jest.fn();
+      const logger = { debug: jest.fn(), info: jest.fn(), warn: warnFn, error: jest.fn() };
+      const bearerAuth = new RealBearerTokenAuth('https://api.productboard.com/v2', logger);
+
+      const prev = process.env.SKIP_TOKEN_VALIDATION;
+      process.env.SKIP_TOKEN_VALIDATION = 'true';
+      try {
+        const result = await bearerAuth.validateToken('any-token');
+        expect(result).toBe(true);
+        expect(warnFn).toHaveBeenCalledWith(expect.stringContaining('SKIP_TOKEN_VALIDATION'));
+      } finally {
+        if (prev === undefined) {
+          delete process.env.SKIP_TOKEN_VALIDATION;
+        } else {
+          process.env.SKIP_TOKEN_VALIDATION = prev;
+        }
+      }
     });
   });
 });

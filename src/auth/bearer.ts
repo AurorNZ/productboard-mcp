@@ -4,25 +4,29 @@ import axios, { AxiosError } from 'axios';
 import { Logger } from '@utils/logger.js';
 
 export class BearerTokenAuth {
-  // private readonly baseUrl: string;
   private readonly logger: Logger;
 
-  constructor(_baseUrl: string) {
-    // this.baseUrl = baseUrl;
-    this.logger = new Logger({ level: 'debug', name: 'bearer-auth' });
+  constructor(_baseUrl: string, logger?: Logger) {
+    // Accept an injected logger so the caller controls the log level.
+    // Fall back to 'info' (never 'debug') to avoid accidental token exposure.
+    this.logger = logger ?? new Logger({ level: 'info', name: 'bearer-auth' });
   }
 
   async validateToken(token: string): Promise<boolean> {
-    // Development bypass
-    if (process.env.NODE_ENV === "development" || process.env.SKIP_TOKEN_VALIDATION === "true") {
+    if (process.env.NODE_ENV === "development") {
       this.logger.debug("Skipping token validation in development mode");
       return true;
     }
     
+    if (process.env.SKIP_TOKEN_VALIDATION === "true") {
+      // SECURITY: this flag disables all token validation. Never set in production.
+      this.logger.warn("SKIP_TOKEN_VALIDATION is set — token validation disabled. Do not use in production.");
+      return true;
+    }
+
     try {
       const url = "https://api.productboard.com/v2/entities?type[]=feature";
-      this.logger.debug('Bearer token validation URL', { url });
-      this.logger.debug('Headers', this.getHeaders(token));
+      this.logger.debug('Validating bearer token against Productboard API');
       
       // Use /features endpoint for token validation (without parameters)
       const response = await axios.get(url, {

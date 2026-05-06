@@ -31,7 +31,7 @@ export class AuthenticationManager implements AuthManagerInterface {
 
   private initializeAuthHandlers(config: AuthConfig): void {
     if (config.type === AuthenticationType.BEARER_TOKEN) {
-      this.bearerAuth = new BearerTokenAuth(this.baseUrl);
+      this.bearerAuth = new BearerTokenAuth(this.baseUrl, this.logger);
     } else if (config.type === AuthenticationType.OAUTH2) {
       if (!config.credentials.clientId || !config.credentials.clientSecret) {
         throw new ProductboardAPIError(
