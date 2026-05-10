@@ -12,6 +12,18 @@ export class OAuth2Auth {
     this.config = config;
   }
 
+  /**
+   * Replace the OAuth2 scope without constructing a new instance.
+   * The next call to `getAuthorizationUrl()` will use the updated scope.
+   *
+   * @deprecated TEMPORARY — supports the confidential-client scope fall-back
+   * workaround in `server.ts`. Remove once the public-client / PKCE-only
+   * OAuth2 flow is available.
+   */
+  updateScope(scope: string): void {
+    this.config = { ...this.config, scope };
+  }
+
   generateState(): string {
     this.state = crypto.randomBytes(32).toString('hex');
     return this.state;

@@ -193,4 +193,21 @@ export class AuthenticationManager implements AuthManagerInterface {
     }
     return this.oauth2Auth!.getAuthorizationUrl();
   }
+
+  /**
+   * Replace the OAuth2 scope used in subsequent authorization URLs.
+   * Call this before `getOAuth2AuthorizationUrl()` to retry authorization
+   * with a narrower scope when the user's Productboard role doesn't permit
+   * the originally requested scopes.
+   *
+   * @deprecated TEMPORARY — part of the confidential-client scope fall-back
+   * workaround in `server.ts`. Remove once the public-client / PKCE-only
+   * OAuth2 flow is available (scope enforcement moves to API-call time and
+   * all roles can authorize unconditionally).
+   */
+  reconfigureScope(scope: string): void {
+    if (this.authType === AuthenticationType.OAUTH2 && this.oauth2Auth) {
+      this.oauth2Auth.updateScope(scope);
+    }
+  }
 }

@@ -27,8 +27,8 @@ import { AuthenticationManager } from '@auth/index.js';
 import { AuthenticationType } from '@auth/types.js';
 import { PermissionDiscoveryService } from '@auth/permission-discovery.js';
 import { TokenPersistence } from '@auth/token-persistence.js';
-import { startCallbackServer } from '@auth/oauth-callback-server.js';
-import { exec } from 'child_process';
+import { startCallbackServer, OAuthCallbackError } from '@auth/oauth-callback-server.js';
+import { execFile } from 'child_process';
 import { UserPermissions, AccessLevel } from '@auth/permissions.js';
 import { ProductboardAPIClient } from '@api/index.js';
 import { RateLimiter, CacheModule } from '@middleware/index.js';
@@ -291,20 +291,110 @@ export class ProductboardMCPServer {
     const parsedUri = new URL(redirectUri);
     const port = parseInt(parsedUri.port || (parsedUri.protocol === 'https:' ? '443' : '80'));
 
-    const authUrl = authManager.getOAuth2AuthorizationUrl();
+    // --- TEMPORARY WORKAROUND: scope fall-back for contributor accounts ---
+    //
+    // This block is a stop-gap until Productboard's public-client / PKCE-only
+    // OAuth2 flow is available. The public-client approach enforces scopes at
+    // API-call time rather than at authorization time, so every user can
+    // authorize regardless of their Productboard role. Once that flow is
+    // implemented this entire try/catch and the NARROW_SCOPE constant should
+    // be removed.
+    //
+    // WHY this is fragile:
+    //   - It relies on Productboard redirecting back to our callback URI with a
+    //     standard OAuth2 error code (`access_denied` or `invalid_scope`) when
+    //     the requested scope exceeds the user's role. If Productboard ever
+    //     changes to showing an in-app error page without redirecting, the
+    //     catch branch will never trigger and the server will time out after
+    //     5 minutes instead of retrying cleanly.
+    //   - The retry opens a second browser window, which can be confusing for
+    //     users who deliberately clicked "Deny" in the first window (the second
+    //     window will prompt them again).
+    //   - `access_denied` is ambiguous — it covers both scope-too-broad and
+    //     user-clicked-deny. We retry on both; if the user explicitly denied
+    //     the second attempt the error will propagate normally.
+    // TODO: remove this fallback once the public-client / PKCE-only flow lands.
+    // --- END TEMPORARY WORKAROUND ---
 
-    process.stderr.write(
-      `\nProductboard authorization required.\nOpening browser...\n\n  ${authUrl}\n\nWaiting for authorization (5 min timeout)...\n`,
-    );
+    const NARROW_SCOPE = 'entities:read notes:read notes:write';
 
-    // Open the browser automatically — user can also copy-paste the URL if this fails
-    const browserCmd = process.platform === 'win32'
-      ? `start "" "${authUrl}"`
-      : `open "${authUrl}"`;
-    exec(browserCmd);
+    // Helper: build and open the authorization URL, then wait for the callback redirect.
+    const runBrowserAuthFlow = async (): Promise<{ code: string; state: string }> => {
+      const authUrl = authManager.getOAuth2AuthorizationUrl();
+      process.stderr.write(
+        `\nProductboard authorization required.\nOpening browser...\n\n  ${authUrl}\n\nWaiting for authorization (5 min timeout)...\n`,
+      );
+      // Open the browser automatically — user can also copy-paste the URL if this fails.
+      // execFile is used instead of exec so the URL is passed as a literal argument
+      // rather than interpolated into a shell string, eliminating any shell-injection risk.
+      if (process.platform === 'win32') {
+        // `start` is a cmd.exe built-in; the empty string is a required placeholder
+        // for the window title so the URL isn't misinterpreted as the title.
+        execFile(process.env['COMSPEC'] ?? 'cmd.exe', ['/c', 'start', '', authUrl]);
+      } else if (process.platform === 'darwin') {
+        execFile('open', [authUrl]);
+      } else {
+        // Linux and other Unix-like systems
+        execFile('xdg-open', [authUrl]);
+      }
+      return startCallbackServer(port);
+    };
 
-    const { code, state } = await startCallbackServer(port);
-    await authManager.handleOAuth2Callback(code, state);
+    try {
+      const { code, state } = await runBrowserAuthFlow();
+      await authManager.handleOAuth2Callback(code, state);
+    } catch (err) {
+      // Productboard rejects the authorization request when the requested scopes exceed
+      // what the user's role permits (contributors cannot authorize entity write/delete
+      // scopes). Detect this via the OAuth2 error code and retry with a narrower scope
+      // that all roles can authorize. Makers and admins are unaffected — their first
+      // attempt always succeeds with full scope.
+      //
+      // TEMPORARY: see the workaround block above — remove this catch when switching
+      // to the public-client / PKCE-only flow.
+      if (
+        err instanceof OAuthCallbackError &&
+        (err.errorCode === 'access_denied' || err.errorCode === 'invalid_scope')
+      ) {
+        logger.warn(
+          `Scope authorization rejected (${err.errorCode}) — retrying with contributor-compatible scope: ${NARROW_SCOPE}`,
+        );
+        process.stderr.write(
+          `\nYour Productboard role does not permit all requested permissions.\n` +
+          `Retrying with read + notes scope (${NARROW_SCOPE})...\n`,
+        );
+        authManager.reconfigureScope(NARROW_SCOPE);
+        try {
+          const { code, state } = await runBrowserAuthFlow();
+          await authManager.handleOAuth2Callback(code, state);
+        } catch (retryErr) {
+          // The narrow-scope attempt was also rejected. Both the full scope and the
+          // minimum contributor scope were denied, which strongly suggests the user
+          // does not have a Productboard account in this workspace, their account has
+          // been deactivated, or the OAuth application has not been granted access.
+          //
+          // Note: `access_denied` is ambiguous — it also fires if the user explicitly
+          // clicked "Deny" in the second browser window. That is an edge case and the
+          // guidance below is still correct (they should contact their administrator).
+          if (
+            retryErr instanceof OAuthCallbackError &&
+            (retryErr.errorCode === 'access_denied' || retryErr.errorCode === 'invalid_scope')
+          ) {
+            const message =
+              'Productboard authorization was denied for both full and read-only scopes.\n' +
+              'Your account may not have access to this Productboard workspace, ' +
+              'or access may have been revoked.\n' +
+              'Please contact your Productboard administrator to verify your account status.';
+            process.stderr.write(`\n${message}\n`);
+            throw new ServerError(message);
+          }
+          // Any other error (e.g. timeout, network failure) — re-throw as-is.
+          throw retryErr;
+        }
+      } else {
+        throw err;
+      }
+    }
 
     // Persist the new tokens
     const persistence = new TokenPersistence();
