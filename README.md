@@ -80,7 +80,9 @@ Download the latest `.mcpb` file from the [Releases](../../releases) page and dr
 
 The bundle is self-contained — no cloning or building required.
 
-After installing, set your `PRODUCTBOARD_API_TOKEN` in the extension settings.
+After installing, you'll be prompted for a **Productboard OAuth Client Secret**. On first use, a browser tab will open to Productboard's login page — sign in to authorize access. Your tokens are stored securely in your OS keychain and won't be requested again unless your session expires (~6 months).
+
+Alternatively, if you prefer bearer token auth, set `PRODUCTBOARD_AUTH_TYPE` to `bearer` and enter your `PRODUCTBOARD_API_TOKEN` instead.
 
 ### Option 2: Local install (manual)
 
@@ -93,7 +95,7 @@ npm install --include=dev
 npm run build
 ```
 
-Then add to your `claude_desktop_config.json`:
+**Bearer token auth** — add to your `claude_desktop_config.json`:
 
 ```json
 {
@@ -109,6 +111,27 @@ Then add to your `claude_desktop_config.json`:
   }
 }
 ```
+
+**OAuth2** — add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "productboard": {
+      "command": "node",
+      "args": ["/absolute/path/to/productboard-mcp/dist/index.js"],
+      "env": {
+        "PRODUCTBOARD_AUTH_TYPE": "oauth2",
+        "PRODUCTBOARD_OAUTH_CLIENT_ID": "your-client-id",
+        "PRODUCTBOARD_OAUTH_CLIENT_SECRET": "your-client-secret",
+        "LOG_LEVEL": "error"
+      }
+    }
+  }
+}
+```
+
+On first run the server will open a browser tab to complete authorization. Tokens are then persisted to your OS keychain so subsequent starts are automatic.
 
 > **Important:** Set `LOG_LEVEL` to `error` (not `info`). MCP uses stdio for communication — info-level logs printed to stdout will interfere with the protocol and cause the server to lock up.
 
@@ -131,25 +154,47 @@ Then add to your `claude_desktop_config.json`:
 }
 ```
 
-## Getting a Productboard API Token
+## Authentication
+
+### Bearer token
 
 1. Log in to your Productboard workspace
 2. Go to **Profile & Settings** → **API Access**
 3. Click **Generate API key** and copy the token
+4. Set `PRODUCTBOARD_API_TOKEN` in your MCP config
+
+### OAuth2 (Authorization Code + PKCE)
+
+1. Go to **https://app.productboard.com/oauth2/applications/new**
+2. Select **OAuth 2.0**, give your app a name, and set the redirect URI to `http://localhost:3000/callback`
+3. Copy the **Client ID** and **Client Secret** into your MCP config as `PRODUCTBOARD_OAUTH_CLIENT_ID` and `PRODUCTBOARD_OAUTH_CLIENT_SECRET`
+4. Set `PRODUCTBOARD_AUTH_TYPE=oauth2`
+
+On first run a browser tab opens for login. Access and refresh tokens are stored in your OS keychain (macOS Keychain / Windows Credential Manager) with a secure file fallback. Refresh tokens are valid for ~180 days — after expiry, the browser flow runs automatically on the next restart.
+
+Tools available to you are determined by your Productboard role — the server checks your OAuth token scopes on startup and only registers the tools you have access to.
 
 ## Configuration
 
-### Required
+### Required (bearer auth)
 
 | Variable | Description |
 |----------|-------------|
-| `PRODUCTBOARD_API_TOKEN` | Your Productboard API token (Bearer auth) |
+| `PRODUCTBOARD_API_TOKEN` | Your Productboard API token |
+
+### Required (OAuth2)
+
+| Variable | Description |
+|----------|-------------|
+| `PRODUCTBOARD_OAUTH_CLIENT_ID` | OAuth2 client ID from your app registration |
+| `PRODUCTBOARD_OAUTH_CLIENT_SECRET` | OAuth2 client secret from your app registration |
 
 ### Optional
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PRODUCTBOARD_AUTH_TYPE` | `bearer` | Auth type: `bearer` or `oauth2` |
+| `PRODUCTBOARD_OAUTH_REDIRECT_URI` | `http://localhost:3000/callback` | OAuth2 redirect URI |
 | `PRODUCTBOARD_API_BASE_URL` | `https://api.productboard.com/v2` | API base URL |
 | `PRODUCTBOARD_API_TIMEOUT` | `10000` | API request timeout (ms) |
 | `API_RETRY_ATTEMPTS` | `3` | Number of retry attempts |
@@ -162,18 +207,16 @@ Then add to your `claude_desktop_config.json`:
 
 > **Note for MCP clients:** Always set `LOG_LEVEL=error` when using with Claude Desktop, Cursor, or any stdio-based MCP client. Higher log levels write to stdout and will break the MCP protocol.
 
-### OAuth2 (optional)
-
-| Variable | Description |
-|----------|-------------|
-| `PRODUCTBOARD_OAUTH_CLIENT_ID` | OAuth2 client ID |
-| `PRODUCTBOARD_OAUTH_CLIENT_SECRET` | OAuth2 client secret |
-| `PRODUCTBOARD_OAUTH_REDIRECT_URI` | OAuth2 redirect URI |
-
 ## Troubleshooting
 
 **"MCP server locks up / produces error logs"**
 → Add `"LOG_LEVEL": "error"` to the `env` block in your MCP config. Info logs written to stdout interfere with the stdio transport.
+
+**"Browser didn't open / I can't complete OAuth2 authorization"**
+→ The authorization URL is also printed to the server log (stderr). Copy it manually into a browser. The server waits 5 minutes before timing out.
+
+**"OAuth2 authorization fails or tokens stop working"**
+→ Restart Claude Desktop — the browser flow runs automatically and issues fresh tokens. If your refresh token has expired (~6 months), the same restart will trigger re-authorization.
 
 **"Claude says it found X notes but I have more"**
 → The note tools default to `limit: 20`. When asking Claude to analyse or count notes, explicitly ask it to use `limit: 500, resolve_entities: false`. If the response contains a `⚠️ Result limit reached` warning, increase the limit further.

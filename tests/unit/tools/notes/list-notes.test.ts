@@ -316,8 +316,8 @@ describe('ListNotesTool', () => {
 
         const result = await tool.execute({});
 
-        expect(result.content[0].text).toContain('[Alice]: Hello there');
-        expect(result.content[0].text).toContain('[Bob]: Hi back');
+        expect(result.content[0].text).toContain('[PB note from "Alice"]: Hello there');
+        expect(result.content[0].text).toContain('[PB note from "Bob"]: Hi back');
       });
 
       it('should fall back to authorType when authorName is absent', async () => {
@@ -337,7 +337,7 @@ describe('ListNotesTool', () => {
 
         const result = await tool.execute({});
 
-        expect(result.content[0].text).toContain('[customer]: I need help');
+        expect(result.content[0].text).toContain('[PB note from "customer"]: I need help');
       });
     });
 
@@ -379,6 +379,27 @@ describe('ListNotesTool', () => {
           endpoint: '/entities/co-unknown-id',
         });
         expect(result.content[0].text).toContain('Company: Resolved Corp');
+      });
+
+      it('should encode special characters in entity ID to prevent path traversal', async () => {
+        const noteWithSlashId = [{
+          id: 'note-enc',
+          fields: { content: 'Feedback', tags: [] },
+          createdAt: '2025-01-01T00:00:00Z',
+          relationships: {
+            data: [{ type: 'customer', target: { type: 'company', id: 'co/malicious' } }],
+          },
+          links: {},
+        }];
+        mockApiClient.getAllPages.mockResolvedValue(noteWithSlashId);
+        mockApiClient.makeRequest.mockResolvedValue({ data: { fields: { name: 'Corp' } } });
+
+        await tool.execute({});
+
+        expect(mockApiClient.makeRequest).toHaveBeenCalledWith({
+          method: 'GET',
+          endpoint: '/entities/co%2Fmalicious',
+        });
       });
 
       it('should show domain as fallback when entity API has no name', async () => {

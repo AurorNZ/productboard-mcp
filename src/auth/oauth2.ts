@@ -6,6 +6,7 @@ import crypto from 'crypto';
 export class OAuth2Auth {
   private config: OAuth2Config;
   private state: string | null = null;
+  private codeVerifier: string | null = null;
 
   constructor(config: OAuth2Config) {
     this.config = config;
@@ -16,13 +17,28 @@ export class OAuth2Auth {
     return this.state;
   }
 
+  private generateCodeVerifier(): string {
+    // 96 random bytes → 128-char base64url string, all unreserved chars [A-Za-z0-9_-]
+    return crypto.randomBytes(96).toString('base64url').slice(0, 128);
+  }
+
+  private generateCodeChallenge(verifier: string): string {
+    // S256: base64url(sha256(verifier)) — no padding
+    return crypto.createHash('sha256').update(verifier).digest('base64url');
+  }
+
   getAuthorizationUrl(): string {
     const state = this.generateState();
+    this.codeVerifier = this.generateCodeVerifier();
+    const challenge = this.generateCodeChallenge(this.codeVerifier);
+
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: this.config.clientId,
       redirect_uri: this.config.redirectUri,
       state,
+      code_challenge: challenge,
+      code_challenge_method: 'S256',
       ...(this.config.scope && { scope: this.config.scope }),
     });
 
@@ -34,13 +50,21 @@ export class OAuth2Auth {
   }
 
   async exchangeCodeForToken(code: string): Promise<TokenResponse> {
+    if (!this.codeVerifier) {
+      throw new ProductboardAPIError(
+        'PKCE code verifier not available — call getAuthorizationUrl() first',
+        'OAUTH_PKCE_ERROR',
+      );
+    }
+
     try {
       const params = new URLSearchParams({
         grant_type: 'authorization_code',
         code,
         client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
         redirect_uri: this.config.redirectUri,
+        code_verifier: this.codeVerifier,
+        ...(this.config.clientSecret && { client_secret: this.config.clientSecret }),
       });
 
       const response = await axios.post<TokenResponse>(
@@ -54,6 +78,9 @@ export class OAuth2Auth {
           timeout: 10000,
         },
       );
+
+      // Verifier is single-use — clear it after successful exchange
+      this.codeVerifier = null;
 
       return response.data;
     } catch (error) {
@@ -71,7 +98,7 @@ export class OAuth2Auth {
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
         client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
+        ...(this.config.clientSecret && { client_secret: this.config.clientSecret }),
       });
 
       const response = await axios.post<TokenResponse>(

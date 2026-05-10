@@ -9,6 +9,22 @@ export class Logger {
     const options: pino.LoggerOptions = {
       level: config.level,
       name: config.name || 'productboard-mcp',
+      // Redact credential fields at any depth so they never reach log storage.
+      redact: {
+        paths: [
+          '*.headers.authorization',
+          '*.headers.Authorization',
+          '*.token',
+          '*.clientSecret',
+          '*.client_secret',
+          '*.accessToken',
+          '*.refreshToken',
+          '*.access_token',
+          '*.refresh_token',
+          'config.auth',
+        ],
+        censor: '[REDACTED]',
+      },
     };
 
     if (config.pretty && process.env.NODE_ENV !== 'production') {

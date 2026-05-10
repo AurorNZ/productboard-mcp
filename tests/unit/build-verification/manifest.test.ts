@@ -51,12 +51,21 @@ describe('manifest.json', () => {
       expect(Object.keys(env)).not.toContain('SKIP_TOKEN_VALIDATION');
     });
 
-    it('should reference PRODUCTBOARD_API_TOKEN', () => {
-      expect(env['PRODUCTBOARD_API_TOKEN']).toBeDefined();
+    it('should hardcode PRODUCTBOARD_AUTH_TYPE to oauth2', () => {
+      expect(env['PRODUCTBOARD_AUTH_TYPE']).toBe('oauth2');
     });
 
-    it('should reference PRODUCTBOARD_AUTH_TYPE', () => {
-      expect(env['PRODUCTBOARD_AUTH_TYPE']).toBeDefined();
+    it('should hardcode PRODUCTBOARD_OAUTH_CLIENT_ID (not user-configurable)', () => {
+      expect(env['PRODUCTBOARD_OAUTH_CLIENT_ID']).toBeDefined();
+      expect(env['PRODUCTBOARD_OAUTH_CLIENT_ID']).not.toContain('user_config');
+    });
+
+    it('should reference PRODUCTBOARD_OAUTH_CLIENT_SECRET from user_config', () => {
+      expect(env['PRODUCTBOARD_OAUTH_CLIENT_SECRET']).toContain('user_config');
+    });
+
+    it('should not expose PRODUCTBOARD_API_TOKEN in env (OAuth2-only bundle)', () => {
+      expect(env['PRODUCTBOARD_API_TOKEN']).toBeUndefined();
     });
 
     it('should reference LOG_LEVEL', () => {
@@ -65,19 +74,16 @@ describe('manifest.json', () => {
   });
 
   describe('user_config', () => {
-    it('should define PRODUCTBOARD_API_TOKEN as required and sensitive', () => {
-      const cfg = manifest?.user_config?.PRODUCTBOARD_API_TOKEN;
+    it('should define PRODUCTBOARD_OAUTH_CLIENT_SECRET as required and sensitive', () => {
+      const cfg = manifest?.user_config?.PRODUCTBOARD_OAUTH_CLIENT_SECRET;
       expect(cfg).toBeDefined();
       expect(cfg.required).toBe(true);
       expect(cfg.sensitive).toBe(true);
       expect(cfg.type).toBe('string');
     });
 
-    it('should define PRODUCTBOARD_AUTH_TYPE as optional with default "bearer"', () => {
-      const cfg = manifest?.user_config?.PRODUCTBOARD_AUTH_TYPE;
-      expect(cfg).toBeDefined();
-      expect(cfg.required).toBe(false);
-      expect(cfg.default).toBe('bearer');
+    it('should not expose PRODUCTBOARD_API_TOKEN to users (OAuth2-only bundle)', () => {
+      expect(manifest?.user_config?.PRODUCTBOARD_API_TOKEN).toBeUndefined();
     });
 
     it('should define LOG_LEVEL as optional with default "error"', () => {

@@ -568,8 +568,8 @@ describe('SearchNotesTool', () => {
 
       const result = await tool.execute({});
 
-      expect(result.content[0].text).toContain('[Alice]: Hello there');
-      expect(result.content[0].text).toContain('[Bob]: Hi back');
+      expect(result.content[0].text).toContain('[PB note from "Alice"]: Hello there');
+      expect(result.content[0].text).toContain('[PB note from "Bob"]: Hi back');
     });
 
     it('should fall back to authorType when authorName is absent', async () => {
@@ -585,7 +585,7 @@ describe('SearchNotesTool', () => {
 
       const result = await tool.execute({});
 
-      expect(result.content[0].text).toContain('[customer]: I need help');
+      expect(result.content[0].text).toContain('[PB note from "customer"]: I need help');
     });
 
     it('should fall back to "Unknown" author when both authorName and authorType are absent', async () => {
@@ -601,7 +601,7 @@ describe('SearchNotesTool', () => {
 
       const result = await tool.execute({});
 
-      expect(result.content[0].text).toContain('[Unknown]: Anonymous message');
+      expect(result.content[0].text).toContain('[PB note from "Unknown"]: Anonymous message');
     });
 
     it('should return empty content string when content field is absent', async () => {
@@ -648,6 +648,24 @@ describe('SearchNotesTool', () => {
         endpoint: '/entities/co-unknown',
       });
       expect(result.content[0].text).toContain('Company: Resolved Corp');
+    });
+
+    it('should encode special characters in entity ID to prevent path traversal', async () => {
+      mockSinglePage([
+        makeNote({
+          relationships: {
+            data: [{ type: 'customer', target: { type: 'company', id: 'co/malicious' } }],
+          },
+        }),
+      ]);
+      mockApiClient.makeRequest.mockResolvedValue({ data: { fields: { name: 'Corp' } } });
+
+      await tool.execute({});
+
+      expect(mockApiClient.makeRequest).toHaveBeenCalledWith({
+        method: 'GET',
+        endpoint: '/entities/co%2Fmalicious',
+      });
     });
 
     it('should fall back to domain when entity API returns domain instead of name', async () => {

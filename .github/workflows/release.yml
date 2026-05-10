@@ -5,18 +5,24 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  contents: write
+# No workflow-level permissions — scoped per-job below.
 
 jobs:
   release:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write       # required to create the GitHub release
+      id-token: write       # required for build provenance attestation
+
     steps:
       - name: Checkout
+        # TODO(sec): pin to commit SHA once tag protection is in place on AurorNZ fork.
+        # Verify SHA against https://github.com/actions/checkout/releases
         uses: actions/checkout@v4
 
       - name: Set up Node.js
+        # TODO(sec): pin to commit SHA.
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -26,7 +32,8 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test -- --passWithNoTests
+        # --passWithNoTests removed: if jest config is broken, build must fail.
+        run: npm test
 
       - name: Build
         run: npm run build
@@ -52,7 +59,18 @@ jobs:
             LICENSE
           echo "FILENAME=$FILENAME" >> $GITHUB_ENV
 
+      - name: Attest build provenance
+        # Produces a signed provenance attestation attached to the release artifact.
+        # TODO(sec): pin to commit SHA.
+        # continue-on-error: attestation API is not available on personal forks;
+        # re-enable as blocking once repo is moved to AurorNZ org.
+        continue-on-error: true
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ env.FILENAME }}
+
       - name: Create GitHub Release
+        # TODO(sec): pin to commit SHA.
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ env.FILENAME }}

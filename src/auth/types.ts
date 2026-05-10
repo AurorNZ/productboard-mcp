@@ -15,6 +15,7 @@ export interface Credentials {
   clientSecret?: string;
   refreshToken?: string;
   redirectUri?: string;
+  scope?: string;
 }
 
 export interface TokenResponse {
@@ -22,7 +23,18 @@ export interface TokenResponse {
   token_type: string;
   expires_in: number;
   refresh_token?: string;
+  refresh_token_expires_in?: number;
+  created_at?: number;
   scope?: string;
+}
+
+export interface TokenInfoResponse {
+  application: { uid: string };
+  resource_owner: { name: string; email: string };
+  space: { name: string; domain: string };
+  scopes: string[];
+  expires_in: number;
+  created_at: number;
 }
 
 export interface AuthConfig {
@@ -42,7 +54,7 @@ export interface TokenCache {
 export interface AuthManagerInterface {
   setCredentials(credentials: Credentials): void;
   validateCredentials(): Promise<boolean>;
-  refreshCredentials(): Promise<void>;
+  refreshCredentials(onRefreshed?: (cache: TokenCache) => Promise<void>): Promise<void>;
   getAuthHeaders(): AuthHeaders;
   isTokenExpired(): boolean;
   getTokenExpiry(): Date | null;
@@ -50,7 +62,7 @@ export interface AuthManagerInterface {
 
 export interface OAuth2Config {
   clientId: string;
-  clientSecret: string;
+  clientSecret?: string; // Not used for public clients (PKCE flow)
   authorizationEndpoint: string;
   tokenEndpoint: string;
   redirectUri: string;

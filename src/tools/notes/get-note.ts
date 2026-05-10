@@ -39,7 +39,7 @@ export class GetNoteTool extends BaseTool<GetNoteParams> {
 
   private async resolveFeature(id: string): Promise<ResolvedFeature | null> {
     try {
-      const response = await this.apiClient.makeRequest({ method: 'GET', endpoint: `/entities/${id}` });
+      const response = await this.apiClient.makeRequest({ method: 'GET', endpoint: `/entities/${encodeURIComponent(id)}` });
       const data = (response as any)?.data ?? response;
       const name = data?.fields?.name ?? null;
       if (!name) return null;
@@ -53,7 +53,7 @@ export class GetNoteTool extends BaseTool<GetNoteParams> {
   protected async executeInternal(params: GetNoteParams): Promise<unknown> {
     this.logger.info('Getting note', { noteId: params.id });
 
-    const response = await (this.apiClient as any).get(`/notes/${params.id}`);
+    const response = await (this.apiClient as any).get(`/notes/${encodeURIComponent(params.id)}`);
     const note = (response as any)?.data ?? response;
 
     if (!note) {
@@ -76,9 +76,10 @@ export class GetNoteTool extends BaseTool<GetNoteParams> {
       } else if (Array.isArray(fields?.content)) {
         return fields.content
           .map((part: any) => {
+            // Quote the author name to prevent format spoofing via PB-supplied values.
             const who = part.authorName ?? part.authorType ?? 'Unknown';
             const text = stripHtml(String(part.content ?? ''));
-            return `[${who}]: ${text}`;
+            return `[PB note from "${who}"]: ${text}`;
           })
           .join(' | ');
       }

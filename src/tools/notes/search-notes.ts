@@ -138,7 +138,7 @@ export class SearchNotesTool extends BaseTool<SearchNotesParams> {
 
   private async resolveEntityName(id: string): Promise<string | null> {
     try {
-      const response = await this.apiClient.makeRequest({ method: 'GET', endpoint: `/entities/${id}` });
+      const response = await this.apiClient.makeRequest({ method: 'GET', endpoint: `/entities/${encodeURIComponent(id)}` });
       const fields = (response as any)?.data?.fields ?? (response as any)?.fields ?? (response as any)?.data ?? response;
       return (fields as any)?.name ?? (fields as any)?.domain ?? null;
     } catch {
@@ -148,7 +148,7 @@ export class SearchNotesTool extends BaseTool<SearchNotesParams> {
 
   private async resolveFeature(id: string): Promise<ResolvedFeature | null> {
     try {
-      const response = await this.apiClient.makeRequest({ method: 'GET', endpoint: `/entities/${id}` });
+      const response = await this.apiClient.makeRequest({ method: 'GET', endpoint: `/entities/${encodeURIComponent(id)}` });
       const data = (response as any)?.data ?? response;
       const name = data?.fields?.name ?? null;
       if (!name) return null;
@@ -262,9 +262,10 @@ export class SearchNotesTool extends BaseTool<SearchNotesParams> {
       } else if (Array.isArray(fields?.content)) {
         return fields.content
           .map((part: any) => {
+            // Quote the author name to prevent format spoofing via PB-supplied values.
             const who = part.authorName ?? part.authorType ?? 'Unknown';
             const text = stripHtml(String(part.content ?? ''));
-            return `[${who}]: ${text}`;
+            return `[PB note from "${who}"]: ${text}`;
           })
           .join(' | ');
       }

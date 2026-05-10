@@ -57,7 +57,7 @@ describe('AuthenticationManager', () => {
     });
 
     it('should create BearerTokenAuth instance', () => {
-      expect(BearerTokenAuth).toHaveBeenCalledWith('https://api.productboard.com/v2');
+      expect(BearerTokenAuth).toHaveBeenCalledWith('https://api.productboard.com/v2', mockLogger);
     });
 
     it('should return auth headers from bearer auth', () => {
@@ -145,9 +145,10 @@ describe('AuthenticationManager', () => {
       expect(OAuth2Auth).toHaveBeenCalledWith({
         clientId: 'test-client-id',
         clientSecret: 'test-client-secret',
-        authorizationEndpoint: 'https://api.productboard.com/oauth/authorize',
-        tokenEndpoint: 'https://api.productboard.com/oauth/token',
-        redirectUri: 'https://localhost:3000/callback',
+        authorizationEndpoint: 'https://app.productboard.com/oauth2/authorize',
+        tokenEndpoint: 'https://app.productboard.com/oauth2/token',
+        redirectUri: 'http://localhost:3000/callback',
+        scope: 'entities:read entities:write entities:delete notes:read notes:write notes:delete',
       });
     });
 
@@ -250,11 +251,11 @@ describe('AuthenticationManager', () => {
           type: AuthenticationType.OAUTH2,
           credentials: {
             type: AuthenticationType.OAUTH2,
-            clientId: 'test-client-id',
-            // Missing clientSecret
+            // Missing clientId — public client self-registers, but still needs one by the time
+            // AuthenticationManager is constructed
           },
         } as any, mockLogger);
-      }).toThrow('OAuth2 credentials (clientId and clientSecret) are required');
+      }).toThrow('OAuth2 requires a client_id. Set PRODUCTBOARD_OAUTH_CLIENT_ID in your environment.');
     });
   });
 
@@ -320,6 +321,29 @@ describe('AuthenticationManager', () => {
       const headers = authManager.getAuthHeaders();
       expect(headers).toBeDefined();
       expect(headers).toEqual({ Authorization: 'Bearer test-token' });
+    });
+  });
+
+  describe('SKIP_TOKEN_VALIDATION bypass', () => {
+    it('should return true and log a warning without calling the API when SKIP_TOKEN_VALIDATION is set', async () => {
+      const { BearerTokenAuth: RealBearerTokenAuth } = jest.requireActual('../../../src/auth/bearer.js');
+      const warnFn = jest.fn();
+      const logger = { debug: jest.fn(), info: jest.fn(), warn: warnFn, error: jest.fn() };
+      const bearerAuth = new RealBearerTokenAuth('https://api.productboard.com/v2', logger);
+
+      const prev = process.env.SKIP_TOKEN_VALIDATION;
+      process.env.SKIP_TOKEN_VALIDATION = 'true';
+      try {
+        const result = await bearerAuth.validateToken('any-token');
+        expect(result).toBe(true);
+        expect(warnFn).toHaveBeenCalledWith(expect.stringContaining('SKIP_TOKEN_VALIDATION'));
+      } finally {
+        if (prev === undefined) {
+          delete process.env.SKIP_TOKEN_VALIDATION;
+        } else {
+          process.env.SKIP_TOKEN_VALIDATION = prev;
+        }
+      }
     });
   });
 });
