@@ -26,6 +26,9 @@ import { ToolRegistry } from './registry.js';
 import { AuthenticationManager } from '@auth/index.js';
 import { AuthenticationType } from '@auth/types.js';
 import { PermissionDiscoveryService } from '@auth/permission-discovery.js';
+import { TokenPersistence } from '@auth/token-persistence.js';
+import { startCallbackServer } from '@auth/oauth-callback-server.js';
+import { exec } from 'child_process';
 import { UserPermissions, AccessLevel } from '@auth/permissions.js';
 import { ProductboardAPIClient } from '@api/index.js';
 import { RateLimiter, CacheModule } from '@middleware/index.js';
@@ -71,12 +74,30 @@ export class ProductboardMCPServer {
       pretty: config.logPretty,
     });
 
+    // For OAuth2: load persisted tokens BEFORE constructing AuthenticationManager,
+    // which requires clientId in its constructor.
+    let resolvedClientId = config.auth.clientId;
+    let persistence: TokenPersistence | undefined;
+    let persistedCache: import('@auth/token-persistence.js').PersistedOAuthData['cache'] | undefined;
+
+    if (config.auth.type === AuthenticationType.OAUTH2) {
+      persistence = new TokenPersistence();
+      const persisted = await persistence.load();
+      persistedCache = persisted?.cache;
+
+      if (!resolvedClientId) {
+        throw new ServerError(
+          'OAuth2 authentication requires PRODUCTBOARD_OAUTH_CLIENT_ID to be set.',
+        );
+      }
+    }
+
     const authConfig = {
       type: config.auth.type,
       credentials: {
         type: config.auth.type,
         token: config.auth.token,
-        clientId: config.auth.clientId,
+        clientId: resolvedClientId,
         clientSecret: config.auth.clientSecret,
         redirectUri: config.auth.redirectUri,
       },
@@ -89,14 +110,15 @@ export class ProductboardMCPServer {
     if (config.auth.type === AuthenticationType.BEARER_TOKEN && config.auth.token) {
       authManager.setCredentials({
         type: AuthenticationType.BEARER_TOKEN,
-        token: config.auth.token
+        token: config.auth.token,
       });
-    } else if (config.auth.type === AuthenticationType.OAUTH2 && config.auth.clientId && config.auth.clientSecret) {
-      authManager.setCredentials({
-        type: AuthenticationType.OAUTH2,
-        clientId: config.auth.clientId,
-        clientSecret: config.auth.clientSecret,
-      });
+    } else if (config.auth.type === AuthenticationType.OAUTH2 && resolvedClientId) {
+      authManager.setCredentials({ type: AuthenticationType.OAUTH2, clientId: resolvedClientId });
+
+      // Load any previously persisted tokens so the user doesn't re-auth on every start
+      if (persistedCache?.accessToken || persistedCache?.refreshToken) {
+        authManager.loadTokenCache(persistedCache);
+      }
     }
     
     const rateLimiter = new RateLimiter(
@@ -115,7 +137,7 @@ export class ProductboardMCPServer {
     const cache = new CacheModule(config.cache);
     const toolRegistry = new ToolRegistry(logger);
     const protocolHandler = new MCPProtocolHandler(toolRegistry, logger);
-    const permissionDiscovery = new PermissionDiscoveryService(apiClient, logger);
+    const permissionDiscovery = new PermissionDiscoveryService(apiClient, logger, authManager);
 
     const dependencies: ServerDependencies = {
       config,
@@ -152,11 +174,18 @@ export class ProductboardMCPServer {
       // Skip network operations in test mode to allow unit testing without API access
       if (process.env.NODE_ENV !== 'test') {
         logger.info('Validating authentication...');
-        const isAuthenticated = await authManager.validateCredentials();
-        if (!isAuthenticated) {
-          logger.error('Authentication validation failed');
-          throw new ServerError('Authentication validation failed');
+
+        const authConfig = this.dependencies.config.auth;
+        if (authConfig.type === AuthenticationType.OAUTH2) {
+          await this.ensureOAuth2Tokens(authManager, authConfig, logger);
+        } else {
+          const isAuthenticated = await authManager.validateCredentials();
+          if (!isAuthenticated) {
+            logger.error('Authentication validation failed');
+            throw new ServerError('Authentication validation failed');
+          }
         }
+
         logger.info('Authentication validated successfully');
       }
 
@@ -225,6 +254,63 @@ export class ProductboardMCPServer {
       logger.error('Error while stopping server', error);
       throw error;
     }
+  }
+
+  private async ensureOAuth2Tokens(
+    authManager: AuthenticationManager,
+    authConfig: { redirectUri?: string },
+    logger: typeof this.dependencies.logger,
+  ): Promise<void> {
+    const cache = authManager.getTokenCache();
+    const hasToken = !!(cache.accessToken || cache.refreshToken);
+
+    if (hasToken) {
+      // Tokens loaded from persistence — validate (will auto-refresh if expired)
+      const persistence = new TokenPersistence();
+      try {
+        const isAuthenticated = await authManager.validateCredentials();
+        if (isAuthenticated) {
+          // If token was silently refreshed, persist the updated tokens
+          const refreshed = authManager.getTokenCache();
+          if (refreshed.accessToken !== cache.accessToken) {
+            await persistence.save(refreshed);
+          }
+          return;
+        }
+      } catch {
+        // Refresh token is expired or invalid — clear stored tokens and fall through to browser re-auth
+        logger.warn('OAuth2 refresh token expired or invalid — clearing stored tokens and re-authorizing via browser');
+        await persistence.clear();
+        authManager.loadTokenCache({});
+      }
+      logger.warn('Stored OAuth2 tokens are no longer valid — starting re-authorization');
+    }
+
+    // No valid tokens — run the browser authorization flow
+    const redirectUri = authConfig.redirectUri || 'http://localhost:3000/callback';
+    const parsedUri = new URL(redirectUri);
+    const port = parseInt(parsedUri.port || (parsedUri.protocol === 'https:' ? '443' : '80'));
+
+    const authUrl = authManager.getOAuth2AuthorizationUrl();
+
+    process.stderr.write(
+      `\nProductboard authorization required.\nOpening browser...\n\n  ${authUrl}\n\nWaiting for authorization (5 min timeout)...\n`,
+    );
+
+    // Open the browser automatically — user can also copy-paste the URL if this fails
+    const browserCmd = process.platform === 'win32'
+      ? `start "" "${authUrl}"`
+      : `open "${authUrl}"`;
+    exec(browserCmd);
+
+    const { code, state } = await startCallbackServer(port);
+    await authManager.handleOAuth2Callback(code, state);
+
+    // Persist the new tokens
+    const persistence = new TokenPersistence();
+    await persistence.save(authManager.getTokenCache());
+
+    logger.info('OAuth2 authorization completed and tokens persisted');
   }
 
   private initializeMCPServer(): void {

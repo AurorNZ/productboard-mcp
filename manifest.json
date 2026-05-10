@@ -2,7 +2,7 @@
   "manifest_version": "0.1",
   "name": "productboard-mcp",
   "display_name": "Productboard",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "MCP server for the Productboard API. Enables AI assistants (Claude, Cursor, etc.) to interact with your Productboard workspace.",
   "author": {
     "name": "AnthonyMarter-auror",
@@ -21,8 +21,9 @@
       "command": "node",
       "args": ["${__dirname}/dist/index.js"],
       "env": {
-        "PRODUCTBOARD_API_TOKEN": "${user_config.PRODUCTBOARD_API_TOKEN}",
-        "PRODUCTBOARD_AUTH_TYPE": "${user_config.PRODUCTBOARD_AUTH_TYPE}",
+        "PRODUCTBOARD_AUTH_TYPE": "oauth2",
+        "PRODUCTBOARD_OAUTH_CLIENT_ID": "tK8Xs9ZPWryjiDQ5MqwQ4RJDtloQburGXCTUQjPqRZA",
+        "PRODUCTBOARD_OAUTH_CLIENT_SECRET": "${user_config.PRODUCTBOARD_OAUTH_CLIENT_SECRET}",
         "LOG_LEVEL": "${user_config.LOG_LEVEL}"
       }
     }
@@ -60,19 +61,12 @@
     }
   },
   "user_config": {
-    "PRODUCTBOARD_API_TOKEN": {
+    "PRODUCTBOARD_OAUTH_CLIENT_SECRET": {
       "type": "string",
-      "title": "Productboard API Token",
-      "description": "Your Productboard API token. Get it from Profile & Settings → API Access in your Productboard workspace.",
+      "title": "Productboard OAuth Client Secret",
+      "description": "OAuth client secret for the Auror Productboard app. Retrieve from the Auror 1Password vault: 'Productboard MCP - OAuth Client Secret'.",
       "required": true,
       "sensitive": true
-    },
-    "PRODUCTBOARD_AUTH_TYPE": {
-      "type": "string",
-      "title": "Auth Type",
-      "description": "Auth type: bearer or oauth2",
-      "required": false,
-      "default": "bearer"
     },
     "LOG_LEVEL": {
       "type": "string",

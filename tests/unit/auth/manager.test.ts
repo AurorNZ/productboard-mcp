@@ -145,9 +145,10 @@ describe('AuthenticationManager', () => {
       expect(OAuth2Auth).toHaveBeenCalledWith({
         clientId: 'test-client-id',
         clientSecret: 'test-client-secret',
-        authorizationEndpoint: 'https://api.productboard.com/oauth/authorize',
-        tokenEndpoint: 'https://api.productboard.com/oauth/token',
-        redirectUri: 'https://localhost:3000/callback',
+        authorizationEndpoint: 'https://app.productboard.com/oauth2/authorize',
+        tokenEndpoint: 'https://app.productboard.com/oauth2/token',
+        redirectUri: 'http://localhost:3000/callback',
+        scope: 'entities:read entities:write entities:delete notes:read notes:write notes:delete',
       });
     });
 
@@ -250,11 +251,11 @@ describe('AuthenticationManager', () => {
           type: AuthenticationType.OAUTH2,
           credentials: {
             type: AuthenticationType.OAUTH2,
-            clientId: 'test-client-id',
-            // Missing clientSecret
+            // Missing clientId — public client self-registers, but still needs one by the time
+            // AuthenticationManager is constructed
           },
         } as any, mockLogger);
-      }).toThrow('OAuth2 credentials (clientId and clientSecret) are required');
+      }).toThrow('OAuth2 requires a client_id. Set PRODUCTBOARD_OAUTH_CLIENT_ID in your environment.');
     });
   });
 

@@ -5,6 +5,7 @@ import {
   AuthHeaders,
   AuthConfig,
   OAuth2Config,
+  TokenCache,
 } from './types.js';
 import { BearerTokenAuth } from './bearer.js';
 import { OAuth2Auth } from './oauth2.js';
@@ -33,21 +34,20 @@ export class AuthenticationManager implements AuthManagerInterface {
     if (config.type === AuthenticationType.BEARER_TOKEN) {
       this.bearerAuth = new BearerTokenAuth(this.baseUrl, this.logger);
     } else if (config.type === AuthenticationType.OAUTH2) {
-      if (!config.credentials.clientId || !config.credentials.clientSecret) {
+      if (!config.credentials.clientId) {
         throw new ProductboardAPIError(
-          'OAuth2 credentials (clientId and clientSecret) are required',
+          'OAuth2 requires a client_id. Set PRODUCTBOARD_OAUTH_CLIENT_ID in your environment.',
           'AUTH_CONFIG_ERROR',
         );
       }
 
-      // OAuth2 endpoints are not versioned — strip any /v2 suffix from the base URL
-      const oauthBase = this.baseUrl.replace(/\/v\d+(\.\d+)*$/, '');
       const oauth2Config: OAuth2Config = {
         clientId: config.credentials.clientId,
         clientSecret: config.credentials.clientSecret,
-        authorizationEndpoint: config.authorizationEndpoint || `${oauthBase}/oauth/authorize`,
-        tokenEndpoint: config.tokenEndpoint || `${oauthBase}/oauth/token`,
-        redirectUri: config.credentials.redirectUri || 'https://localhost:3000/callback',
+        authorizationEndpoint: config.authorizationEndpoint || 'https://app.productboard.com/oauth2/authorize',
+        tokenEndpoint: config.tokenEndpoint || 'https://app.productboard.com/oauth2/token',
+        redirectUri: config.credentials.redirectUri || 'http://localhost:3000/callback',
+        scope: config.credentials.scope || 'entities:read entities:write entities:delete notes:read notes:write notes:delete',
       };
 
       this.oauth2Auth = new OAuth2Auth(oauth2Config);
@@ -86,7 +86,7 @@ export class AuthenticationManager implements AuthManagerInterface {
     }
   }
 
-  async refreshCredentials(): Promise<void> {
+  async refreshCredentials(onRefreshed?: (cache: TokenCache) => Promise<void>): Promise<void> {
     if (this.authType !== AuthenticationType.OAUTH2) {
       throw new ProductboardAPIError(
         'Token refresh is only available for OAuth2',
@@ -106,6 +106,9 @@ export class AuthenticationManager implements AuthManagerInterface {
         this.store.updateRefreshToken(tokenResponse.refresh_token);
       }
       this.logger.info('OAuth2 tokens refreshed successfully');
+      if (onRefreshed) {
+        await onRefreshed(this.store.getTokenCache());
+      }
     } catch (error) {
       this.logger.error('Failed to refresh OAuth2 tokens', error);
       throw error;
@@ -146,6 +149,14 @@ export class AuthenticationManager implements AuthManagerInterface {
       return null;
     }
     return this.store.getTokenExpiry();
+  }
+
+  getTokenCache(): TokenCache {
+    return this.store.getTokenCache();
+  }
+
+  loadTokenCache(cache: TokenCache): void {
+    this.store.setTokenCache(cache);
   }
 
   async handleOAuth2Callback(code: string, state: string): Promise<void> {
