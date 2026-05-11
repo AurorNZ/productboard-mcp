@@ -148,7 +148,7 @@ describe('AuthenticationManager', () => {
         authorizationEndpoint: 'https://app.productboard.com/oauth2/authorize',
         tokenEndpoint: 'https://app.productboard.com/oauth2/token',
         redirectUri: 'http://localhost:3000/callback',
-        scope: 'entities:read notes:read notes:write',
+        scope: 'notes:read notes:write',
       });
     });
 

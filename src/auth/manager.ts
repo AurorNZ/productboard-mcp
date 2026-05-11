@@ -49,13 +49,19 @@ export class AuthenticationManager implements AuthManagerInterface {
         redirectUri: config.credentials.redirectUri || 'http://localhost:3000/callback',
         // Scope is determined by the user's chosen access level.
         //
-        // Full access (PRODUCTBOARD_FULL_ACCESS=true): requests write/delete
-        // scopes for entity resources (features, products, releases, objectives,
-        // key results). Requires a Maker or Admin Productboard role — contributor
-        // accounts will be blocked by Productboard at the authorization step.
+        // Standard access (default, PRODUCTBOARD_FULL_ACCESS=false):
+        //   notes:read notes:write
+        //   Works for all Productboard roles — contributor, maker, and admin.
+        //   Productboard restricts entities:read (and all entity scopes) to
+        //   Maker and Admin roles only; requesting it for a Contributor account
+        //   causes Productboard to show an authorization error and never redirect
+        //   back to the callback URI.
         //
-        // Standard access (default): requests read-only entity scopes plus note
-        // creation. Works for all Productboard roles including contributors.
+        // Full access (PRODUCTBOARD_FULL_ACCESS=true):
+        //   entities:read entities:write entities:delete notes:read notes:write notes:delete
+        //   Requires a Maker or Admin Productboard role. Contributors must leave
+        //   Full access mode unchecked or they will be blocked at the authorization
+        //   step.
         //
         // Note: Productboard confidential clients enforce scopes at authorization
         // time. If a contributor selects full access they will see an error on
@@ -67,7 +73,7 @@ export class AuthenticationManager implements AuthManagerInterface {
         // the role/scope mismatch entirely.
         scope: config.credentials.scope || (config.credentials.fullAccess
           ? 'entities:read entities:write entities:delete notes:read notes:write notes:delete'
-          : 'entities:read notes:read notes:write'),
+          : 'notes:read notes:write'),
       };
 
       this.oauth2Auth = new OAuth2Auth(oauth2Config);

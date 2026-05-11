@@ -2,7 +2,7 @@
   "manifest_version": "0.1",
   "name": "productboard-mcp",
   "display_name": "Productboard",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "description": "MCP server for the Productboard API. Enables AI assistants (Claude, Cursor, etc.) to interact with your Productboard workspace.",
   "author": {
     "name": "AnthonyMarter-auror",
@@ -72,7 +72,7 @@
     "PRODUCTBOARD_FULL_ACCESS": {
       "type": "boolean",
       "title": "Full access mode",
-      "description": "Enable write and delete access to features, products, releases, objectives, and key results. Requires a Maker or Admin Productboard role — leave unchecked if you are a Contributor.",
+      "description": "Enable access to features, products, releases, objectives, and key results (read, write, and delete). Requires a Maker or Admin Productboard role. Contributors must leave this unchecked — checking it will cause authorization to fail.",
       "required": false,
       "default": false
     },

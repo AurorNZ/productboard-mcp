@@ -92,7 +92,7 @@ export class ProductboardMCPServer {
       if (persisted?.cache && persisted.scope !== undefined) {
         const expectedScope = (config.auth.fullAccess ?? false)
           ? 'entities:read entities:write entities:delete notes:read notes:write notes:delete'
-          : 'entities:read notes:read notes:write';
+          : 'notes:read notes:write';
         if (persisted.scope !== expectedScope) {
           process.stderr.write(
             '\nProductboard access level has changed — stored tokens have been cleared.\n' +

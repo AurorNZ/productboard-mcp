@@ -87,7 +87,7 @@ const MockTokenPersistence = TokenPersistence as jest.MockedClass<typeof TokenPe
 // Shared config fixture
 // ---------------------------------------------------------------------------
 
-const NARROW_SCOPE = 'entities:read notes:read notes:write';
+const NARROW_SCOPE = 'notes:read notes:write';
 const FULL_SCOPE =
   'entities:read entities:write entities:delete notes:read notes:write notes:delete';
 
