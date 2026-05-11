@@ -2,7 +2,7 @@
   "manifest_version": "0.1",
   "name": "productboard-mcp",
   "display_name": "Productboard",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "MCP server for the Productboard API. Enables AI assistants (Claude, Cursor, etc.) to interact with your Productboard workspace.",
   "author": {
     "name": "AnthonyMarter-auror",
@@ -24,6 +24,7 @@
         "PRODUCTBOARD_AUTH_TYPE": "oauth2",
         "PRODUCTBOARD_OAUTH_CLIENT_ID": "tK8Xs9ZPWryjiDQ5MqwQ4RJDtloQburGXCTUQjPqRZA",
         "PRODUCTBOARD_OAUTH_CLIENT_SECRET": "${user_config.PRODUCTBOARD_OAUTH_CLIENT_SECRET}",
+        "PRODUCTBOARD_FULL_ACCESS": "${user_config.PRODUCTBOARD_FULL_ACCESS}",
         "LOG_LEVEL": "${user_config.LOG_LEVEL}"
       }
     }
@@ -67,6 +68,13 @@
       "description": "OAuth client secret from your Productboard app registration. Register an app at https://app.productboard.com/oauth2/applications/new if you don't have one.",
       "required": true,
       "sensitive": true
+    },
+    "PRODUCTBOARD_FULL_ACCESS": {
+      "type": "boolean",
+      "title": "Full access mode",
+      "description": "Enable write and delete access to features, products, releases, objectives, and key results. Requires a Maker or Admin Productboard role — leave unchecked if you are a Contributor.",
+      "required": false,
+      "default": false
     },
     "LOG_LEVEL": {
       "type": "string",

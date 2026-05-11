@@ -43,6 +43,7 @@ export class ConfigManager {
     if (env.PRODUCTBOARD_OAUTH_CLIENT_ID) auth.clientId = env.PRODUCTBOARD_OAUTH_CLIENT_ID;
     if (env.PRODUCTBOARD_OAUTH_CLIENT_SECRET) auth.clientSecret = env.PRODUCTBOARD_OAUTH_CLIENT_SECRET;
     if (env.PRODUCTBOARD_OAUTH_REDIRECT_URI) auth.redirectUri = env.PRODUCTBOARD_OAUTH_REDIRECT_URI;
+    if (env.PRODUCTBOARD_FULL_ACCESS) auth.fullAccess = env.PRODUCTBOARD_FULL_ACCESS === 'true';
 
     const api: Partial<Config['api']> = {};
     if (env.PRODUCTBOARD_API_BASE_URL) api.baseUrl = env.PRODUCTBOARD_API_BASE_URL;

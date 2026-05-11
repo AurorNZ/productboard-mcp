@@ -71,6 +71,10 @@ describe('manifest.json', () => {
     it('should reference LOG_LEVEL', () => {
       expect(env['LOG_LEVEL']).toBeDefined();
     });
+
+    it('should reference PRODUCTBOARD_FULL_ACCESS from user_config', () => {
+      expect(env['PRODUCTBOARD_FULL_ACCESS']).toContain('user_config');
+    });
   });
 
   describe('user_config', () => {
@@ -91,6 +95,14 @@ describe('manifest.json', () => {
       expect(cfg).toBeDefined();
       expect(cfg.required).toBe(false);
       expect(cfg.default).toBe('error');
+    });
+
+    it('should define PRODUCTBOARD_FULL_ACCESS as an optional boolean defaulting to false', () => {
+      const cfg = manifest?.user_config?.PRODUCTBOARD_FULL_ACCESS;
+      expect(cfg).toBeDefined();
+      expect(cfg.type).toBe('boolean');
+      expect(cfg.required).toBe(false);
+      expect(cfg.default).toBe(false);
     });
   });
 

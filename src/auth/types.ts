@@ -16,6 +16,8 @@ export interface Credentials {
   refreshToken?: string;
   redirectUri?: string;
   scope?: string;
+  /** When true, full write/delete entity scopes are requested. Requires Maker or Admin role. */
+  fullAccess?: boolean;
 }
 
 export interface TokenResponse {

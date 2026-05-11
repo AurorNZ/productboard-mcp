@@ -47,7 +47,27 @@ export class AuthenticationManager implements AuthManagerInterface {
         authorizationEndpoint: config.authorizationEndpoint || 'https://app.productboard.com/oauth2/authorize',
         tokenEndpoint: config.tokenEndpoint || 'https://app.productboard.com/oauth2/token',
         redirectUri: config.credentials.redirectUri || 'http://localhost:3000/callback',
-        scope: config.credentials.scope || 'entities:read entities:write entities:delete notes:read notes:write notes:delete',
+        // Scope is determined by the user's chosen access level.
+        //
+        // Full access (PRODUCTBOARD_FULL_ACCESS=true): requests write/delete
+        // scopes for entity resources (features, products, releases, objectives,
+        // key results). Requires a Maker or Admin Productboard role — contributor
+        // accounts will be blocked by Productboard at the authorization step.
+        //
+        // Standard access (default): requests read-only entity scopes plus note
+        // creation. Works for all Productboard roles including contributors.
+        //
+        // Note: Productboard confidential clients enforce scopes at authorization
+        // time. If a contributor selects full access they will see an error on
+        // Productboard's authorization page and will not be redirected back;
+        // they should deselect the "Full access mode" option and re-authorize.
+        //
+        // TODO: switch to the public-client / PKCE-only flow once Productboard
+        // makes it available — that enforces scopes at API-call time, eliminating
+        // the role/scope mismatch entirely.
+        scope: config.credentials.scope || (config.credentials.fullAccess
+          ? 'entities:read entities:write entities:delete notes:read notes:write notes:delete'
+          : 'entities:read notes:read notes:write'),
       };
 
       this.oauth2Auth = new OAuth2Auth(oauth2Config);
@@ -194,20 +214,4 @@ export class AuthenticationManager implements AuthManagerInterface {
     return this.oauth2Auth!.getAuthorizationUrl();
   }
 
-  /**
-   * Replace the OAuth2 scope used in subsequent authorization URLs.
-   * Call this before `getOAuth2AuthorizationUrl()` to retry authorization
-   * with a narrower scope when the user's Productboard role doesn't permit
-   * the originally requested scopes.
-   *
-   * @deprecated TEMPORARY — part of the confidential-client scope fall-back
-   * workaround in `server.ts`. Remove once the public-client / PKCE-only
-   * OAuth2 flow is available (scope enforcement moves to API-call time and
-   * all roles can authorize unconditionally).
-   */
-  reconfigureScope(scope: string): void {
-    if (this.authType === AuthenticationType.OAUTH2 && this.oauth2Auth) {
-      this.oauth2Auth.updateScope(scope);
-    }
-  }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@enreign/productboard-mcp",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "MCP server for Productboard API integration",
   "main": "dist/index.js",
   "bin": "./productboard-mcp.js",

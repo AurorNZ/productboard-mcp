@@ -8,11 +8,8 @@ export interface OAuthCallbackResult {
 /**
  * Thrown when Productboard's authorization server redirects back with an error code
  * (e.g. `access_denied` when the requested scopes exceed the user's Productboard role).
- * Distinguishing this from a generic Error lets callers retry with a narrower scope.
- *
- * NOTE: The primary consumer of this class is the temporary scope fall-back workaround
- * in `server.ts`. When the public-client / PKCE-only OAuth2 flow is implemented this
- * class can be removed or reduced to a plain error type.
+ * Distinguishing this from a generic Error lets callers surface a role-specific hint
+ * to the user (e.g. "disable Full access mode if your role is Contributor").
  */
 export class OAuthCallbackError extends Error {
   constructor(

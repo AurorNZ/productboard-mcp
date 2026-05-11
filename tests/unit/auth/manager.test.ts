@@ -141,15 +141,34 @@ describe('AuthenticationManager', () => {
       }, mockLogger);
     });
 
-    it('should create OAuth2Auth instance', () => {
+    it('should create OAuth2Auth instance with narrow default scope', () => {
       expect(OAuth2Auth).toHaveBeenCalledWith({
         clientId: 'test-client-id',
         clientSecret: 'test-client-secret',
         authorizationEndpoint: 'https://app.productboard.com/oauth2/authorize',
         tokenEndpoint: 'https://app.productboard.com/oauth2/token',
         redirectUri: 'http://localhost:3000/callback',
-        scope: 'entities:read entities:write entities:delete notes:read notes:write notes:delete',
+        scope: 'entities:read notes:read notes:write',
       });
+    });
+
+    it('should request full scope when fullAccess is true', () => {
+      (OAuth2Auth as jest.Mock).mockClear();
+      new AuthenticationManager({
+        type: AuthenticationType.OAUTH2,
+        credentials: {
+          type: AuthenticationType.OAUTH2,
+          clientId: 'test-client-id',
+          clientSecret: 'test-client-secret',
+          fullAccess: true,
+        },
+      }, mockLogger);
+
+      expect(OAuth2Auth).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scope: 'entities:read entities:write entities:delete notes:read notes:write notes:delete',
+        }),
+      );
     });
 
     it('should return auth headers from OAuth2 auth', () => {

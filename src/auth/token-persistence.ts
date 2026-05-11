@@ -10,10 +10,14 @@ interface PersistedData {
   accessToken?: string;
   refreshToken?: string;
   expiresAt?: string;
+  /** OAuth2 scope string that was requested when these tokens were issued. */
+  scope?: string;
 }
 
 export interface PersistedOAuthData {
   cache: TokenCache;
+  /** OAuth2 scope string that was requested when these tokens were issued. */
+  scope?: string;
 }
 
 function getTokenFilePath(): string {
@@ -44,14 +48,16 @@ function deserialise(raw: string): PersistedOAuthData {
       refreshToken: data.refreshToken,
       expiresAt: data.expiresAt ? new Date(data.expiresAt) : undefined,
     },
+    scope: data.scope,
   };
 }
 
-function toPersistedData(cache: TokenCache): PersistedData {
+function toPersistedData(cache: TokenCache, scope?: string): PersistedData {
   return {
     accessToken: cache.accessToken,
     refreshToken: cache.refreshToken,
     expiresAt: cache.expiresAt?.toISOString(),
+    scope,
   };
 }
 
@@ -98,8 +104,8 @@ export class TokenPersistence {
     this.filePath = getTokenFilePath();
   }
 
-  async save(cache: TokenCache): Promise<void> {
-    const data = toPersistedData(cache);
+  async save(cache: TokenCache, scope?: string): Promise<void> {
+    const data = toPersistedData(cache, scope);
     try {
       await tryKeychainSave(data);
       return;

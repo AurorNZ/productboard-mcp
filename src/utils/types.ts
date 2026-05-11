@@ -29,6 +29,8 @@ export interface AuthConfig {
   clientId?: string;
   clientSecret?: string;
   redirectUri?: string;
+  /** When true, requests write/delete scopes for entity resources (requires Maker or Admin role). */
+  fullAccess?: boolean;
 }
 
 export interface APIConfig {
