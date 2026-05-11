@@ -196,7 +196,12 @@ export class ProductboardMCPServer {
 
         const authConfig = this.dependencies.config.auth;
         if (authConfig.type === AuthenticationType.OAUTH2) {
-          await this.ensureOAuth2Tokens(authManager, authConfig, logger);
+          // Fast path only: validate / silently refresh existing tokens.
+          // If no valid tokens are available after this, the browser-based
+          // OAuth flow is deferred to the first tool call so that the MCP
+          // initialize handshake can complete within Claude Desktop's
+          // 60-second timeout.
+          await this.tryTokenRefresh(authManager, logger);
         } else {
           const isAuthenticated = await authManager.validateCredentials();
           if (!isAuthenticated) {
@@ -206,29 +211,35 @@ export class ProductboardMCPServer {
         }
 
         logger.info('Authentication validated successfully');
-      }
 
-      // Test API connection (skip in test mode)
-      if (process.env.NODE_ENV !== 'test') {
-        logger.info('Testing API connection...');
-        const connectionTest = await apiClient.testConnection();
-        if (!connectionTest) {
-          logger.error('API connection test failed');
-          throw new ServerError('API connection test failed');
+        // For OAuth2, skip the API connection test and permission discovery
+        // when no valid tokens are available yet — they will run once the
+        // browser auth flow completes on the first tool call.
+        const hasValidTokens = authConfig.type !== AuthenticationType.OAUTH2
+          || !!authManager.getTokenCache().accessToken;
+
+        if (hasValidTokens) {
+          // Test API connection
+          logger.info('Testing API connection...');
+          const connectionTest = await apiClient.testConnection();
+          if (!connectionTest) {
+            logger.error('API connection test failed');
+            throw new ServerError('API connection test failed');
+          }
+          logger.info('API connection established');
+
+          // Discover user permissions
+          logger.info('Discovering user permissions...');
+          const userPermissions = await this.dependencies.permissionDiscovery.discoverUserPermissions();
+          this.dependencies.userPermissions = userPermissions;
+          logger.info('Permission discovery completed', {
+            accessLevel: userPermissions.accessLevel,
+            isReadOnly: userPermissions.isReadOnly,
+            permissionCount: userPermissions.permissions.size,
+          });
+        } else {
+          logger.info('No OAuth2 tokens available yet — API connection test and permission discovery deferred until first tool call triggers authorization.');
         }
-        logger.info('API connection established');
-      }
-
-      // Discover user permissions (skip in test mode)
-      if (process.env.NODE_ENV !== 'test') {
-        logger.info('Discovering user permissions...');
-        const userPermissions = await this.dependencies.permissionDiscovery.discoverUserPermissions();
-        this.dependencies.userPermissions = userPermissions;
-        logger.info('Permission discovery completed', {
-          accessLevel: userPermissions.accessLevel,
-          isReadOnly: userPermissions.isReadOnly,
-          permissionCount: userPermissions.permissions.size,
-        });
       }
 
       // Register tools based on permissions
@@ -275,6 +286,46 @@ export class ProductboardMCPServer {
     }
   }
 
+  /**
+   * Fast-path token check: validates existing tokens and silently refreshes
+   * them if expired. Never opens a browser — if no valid tokens exist after
+   * this call, the browser-based OAuth flow will be triggered lazily on the
+   * first tool call instead.
+   */
+  private async tryTokenRefresh(
+    authManager: AuthenticationManager,
+    logger: typeof this.dependencies.logger,
+  ): Promise<void> {
+    const cache = authManager.getTokenCache();
+    const hasToken = !!(cache.accessToken || cache.refreshToken);
+    if (!hasToken) return;
+
+    const config = this.dependencies.config;
+    const expectedScope = (config.auth.fullAccess ?? false)
+      ? 'entities:read entities:write entities:delete notes:read notes:write notes:delete'
+      : 'notes:read notes:write';
+
+    const persistence = new TokenPersistence();
+    try {
+      const isAuthenticated = await authManager.validateCredentials();
+      if (isAuthenticated) {
+        const refreshed = authManager.getTokenCache();
+        if (refreshed.accessToken !== cache.accessToken) {
+          await persistence.save(refreshed, expectedScope);
+          logger.info('OAuth2 access token silently refreshed and persisted');
+        }
+      } else {
+        logger.warn('Stored OAuth2 tokens are no longer valid — will re-authorize on first tool call');
+        await persistence.clear();
+        authManager.loadTokenCache({});
+      }
+    } catch {
+      logger.warn('OAuth2 token refresh failed — will re-authorize on first tool call');
+      await persistence.clear();
+      authManager.loadTokenCache({});
+    }
+  }
+
   private async ensureOAuth2Tokens(
     authManager: AuthenticationManager,
     authConfig: { redirectUri?: string },
@@ -283,7 +334,7 @@ export class ProductboardMCPServer {
     const config = this.dependencies.config;
     const expectedScope = (config.auth.fullAccess ?? false)
       ? 'entities:read entities:write entities:delete notes:read notes:write notes:delete'
-      : 'entities:read notes:read notes:write';
+      : 'notes:read notes:write';
 
     const cache = authManager.getTokenCache();
     const hasToken = !!(cache.accessToken || cache.refreshToken);
@@ -357,6 +408,10 @@ export class ProductboardMCPServer {
         process.stderr.write(`\n${message}\n`);
         throw new ServerError(message);
       }
+      // Surface unexpected errors directly in the MCP client log so they are
+      // visible even when the log level suppresses lower-priority messages.
+      const errMsg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`\nProductboard OAuth2 authorization failed: ${errMsg}\n`);
       throw err;
     }
 
@@ -409,6 +464,16 @@ export class ProductboardMCPServer {
         // Validate tool name
         if (!name || typeof name !== 'string') {
           throw new ProtocolError('Tool name is required and must be a string');
+        }
+
+        // Ensure valid OAuth2 tokens before executing the tool.
+        // On first use (or after expiry that cannot be silently refreshed),
+        // this triggers the browser authorization flow and waits for the
+        // callback. Deferring auth here — rather than in initialize() — lets
+        // the MCP handshake complete within Claude Desktop's 60-second timeout.
+        if (this.dependencies.config.auth.type === AuthenticationType.OAUTH2) {
+          const { authManager: am, logger: log } = this.dependencies;
+          await this.ensureOAuth2Tokens(am, this.dependencies.config.auth, log);
         }
 
         const result = await this.handleToolExecution(name, args);

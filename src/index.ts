@@ -43,6 +43,12 @@ async function main(): Promise<void> {
     process.on('SIGINT', () => shutdown('SIGINT'));
     process.on('SIGTERM', () => shutdown('SIGTERM'));
 
+    // Exit cleanly when the MCP client closes its end of the stdio connection.
+    // Without this, open handles (e.g. an OAuth callback HTTP server on
+    // port 3000 waiting for a browser redirect) keep the process alive
+    // indefinitely, blocking port reuse on the next connection attempt.
+    process.stdin.on('close', () => shutdown('stdin close'));
+
     // Start server
     await server.start();
     
