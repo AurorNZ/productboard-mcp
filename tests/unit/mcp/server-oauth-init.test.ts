@@ -209,13 +209,17 @@ describe('initialize() — OAuth2 lazy auth', () => {
       process.env.NODE_ENV = 'test';
     });
 
-    it('runs the API connection test', async () => {
+    it('does NOT run the API connection test (uses token-info endpoint instead)', async () => {
+      // For OAuth2 we skip testConnection() — it calls GET /entities which
+      // requires entities:read scope and always 403s for contributor-role
+      // (notes-only) tokens. Permission discovery via /oauth2/token/info is
+      // scope-agnostic and serves as the connectivity check instead.
       const deps = makeOAuth2Dependencies({ accessToken: 'valid-token' });
       const server = new ProductboardMCPServer(deps);
 
       await server.initialize();
 
-      expect(deps.apiClient.testConnection).toHaveBeenCalledTimes(1);
+      expect(deps.apiClient.testConnection).not.toHaveBeenCalled();
     });
 
     it('runs permission discovery', async () => {
