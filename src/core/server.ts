@@ -223,20 +223,31 @@ export class ProductboardMCPServer {
           logger.info('Testing API connection...');
           const connectionTest = await apiClient.testConnection();
           if (!connectionTest) {
-            logger.error('API connection test failed');
-            throw new ServerError('API connection test failed');
-          }
-          logger.info('API connection established');
+            if (authConfig.type === AuthenticationType.OAUTH2) {
+              // Stored tokens are likely revoked or expired beyond silent refresh.
+              // Clear them and defer re-authorization to the first tool call rather
+              // than crashing — the browser flow will re-establish valid tokens.
+              logger.warn('API connection test failed with stored OAuth2 tokens — clearing tokens and deferring re-authorization to first tool call');
+              const persistence = new TokenPersistence();
+              await persistence.clear();
+              authManager.loadTokenCache({});
+            } else {
+              logger.error('API connection test failed');
+              throw new ServerError('API connection test failed');
+            }
+          } else {
+            logger.info('API connection established');
 
-          // Discover user permissions
-          logger.info('Discovering user permissions...');
-          const userPermissions = await this.dependencies.permissionDiscovery.discoverUserPermissions();
-          this.dependencies.userPermissions = userPermissions;
-          logger.info('Permission discovery completed', {
-            accessLevel: userPermissions.accessLevel,
-            isReadOnly: userPermissions.isReadOnly,
-            permissionCount: userPermissions.permissions.size,
-          });
+            // Discover user permissions
+            logger.info('Discovering user permissions...');
+            const userPermissions = await this.dependencies.permissionDiscovery.discoverUserPermissions();
+            this.dependencies.userPermissions = userPermissions;
+            logger.info('Permission discovery completed', {
+              accessLevel: userPermissions.accessLevel,
+              isReadOnly: userPermissions.isReadOnly,
+              permissionCount: userPermissions.permissions.size,
+            });
+          }
         } else {
           logger.info('No OAuth2 tokens available yet — API connection test and permission discovery deferred until first tool call triggers authorization.');
         }
@@ -375,7 +386,7 @@ export class ProductboardMCPServer {
     if (process.platform === 'win32') {
       // `start` is a cmd.exe built-in; the empty string is a required placeholder
       // for the window title so the URL isn't misinterpreted as the title.
-      execFile(process.env['COMSPEC'] ?? 'cmd.exe', ['/c', 'start', '', authUrl]);
+      execFile('powershell.exe', ['-NoProfile', '-Command', `Start-Process '${authUrl}'`]);
     } else if (process.platform === 'darwin') {
       execFile('open', [authUrl]);
     } else {
