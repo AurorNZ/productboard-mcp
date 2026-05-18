@@ -219,23 +219,30 @@ export class ProductboardMCPServer {
           || !!authManager.getTokenCache().accessToken;
 
         if (hasValidTokens) {
-          // Test API connection
-          logger.info('Testing API connection...');
-          const connectionTest = await apiClient.testConnection();
-          if (!connectionTest) {
-            if (authConfig.type === AuthenticationType.OAUTH2) {
-              // Stored tokens are likely revoked or expired beyond silent refresh.
-              // Clear them and defer re-authorization to the first tool call rather
-              // than crashing — the browser flow will re-establish valid tokens.
-              logger.warn('API connection test failed with stored OAuth2 tokens — clearing tokens and deferring re-authorization to first tool call');
-              const persistence = new TokenPersistence();
-              await persistence.clear();
-              authManager.loadTokenCache({});
-            } else {
+          if (authConfig.type === AuthenticationType.OAUTH2) {
+            // For OAuth2 we skip the entities-scoped connection test entirely.
+            // testConnection() calls GET /entities which requires entities:read —
+            // a notes-only token (notes:read notes:write) would always receive a
+            // 403, which is "connected but unauthorized", not a connectivity failure.
+            // Instead we go straight to permission discovery, which calls the
+            // scope-agnostic /oauth2/token/info endpoint and handles its own
+            // failures gracefully (falls back to read-only on any error).
+            logger.info('Discovering user permissions via token info...');
+            const userPermissions = await this.dependencies.permissionDiscovery.discoverUserPermissions();
+            this.dependencies.userPermissions = userPermissions;
+            logger.info('Permission discovery completed', {
+              accessLevel: userPermissions.accessLevel,
+              isReadOnly: userPermissions.isReadOnly,
+              permissionCount: userPermissions.permissions.size,
+            });
+          } else {
+            // Bearer token path: use the entities endpoint to verify connectivity.
+            logger.info('Testing API connection...');
+            const connectionTest = await apiClient.testConnection();
+            if (!connectionTest) {
               logger.error('API connection test failed');
               throw new ServerError('API connection test failed');
             }
-          } else {
             logger.info('API connection established');
 
             // Discover user permissions
@@ -249,7 +256,7 @@ export class ProductboardMCPServer {
             });
           }
         } else {
-          logger.info('No OAuth2 tokens available yet — API connection test and permission discovery deferred until first tool call triggers authorization.');
+          logger.info('No OAuth2 tokens available yet — permission discovery deferred until first tool call triggers authorization.');
         }
       }
 
